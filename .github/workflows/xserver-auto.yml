@@ -1,0 +1,81 @@
+name: 🪄 XServer 自动签到（私库版）
+
+on:
+  schedule:
+    # UTC 00:15 & 12:15
+    # 对应北京时间 08:15 & 20:15
+    - cron: "15 0,12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write   # ⚠️ 必须加，否则 push 会被拒绝
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ✅ 检出私库 xserver
+      - name: Checkout private repo (xserver)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/xserver
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ⏱️ pip + playwright 缓存
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/ms-playwright
+          key: ${{ runner.os }}-pip-${{ hashFiles('scripts/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          pip install -r requirements.txt -q
+          python -m playwright install chromium
+
+      # 🎲 防止定时任务撞点
+      - name: Random delay (0-119s)
+        run: |
+          delay=$((RANDOM % 120))
+          echo "Random delay: ${delay}s"
+          sleep $delay
+
+      # ▶️ 执行续期脚本
+      - name: Run renew script
+        working-directory: scripts
+        env:
+          XSERVER_EMAIL: ${{ secrets.XSERVER_EMAIL }}
+          XSERVER_PASSWORD: ${{ secrets.XSERVER_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+          HEADLESS: "true"
+        run: python renew.py
+
+      # 🚀 提交并推送到私库
+      - name: Commit & push changes
+        if: success()
+        working-directory: scripts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add README.md time.txt
+
+          git commit -m "chore: auto check-in update [skip ci]" \
+            && git push || echo "Nothing to push"
+
+      
