@@ -1,1 +1,65 @@
-1
+name: Weirdhost-AutoRenew
+
+on:
+  schedule:
+    # 每天 UTC 时间 4:00 运行（北京时间 12:00）
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/weirdhost
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        working-directory: scripts
+        run: pip install -r requirements.txt -q > /dev/null 2>&1
+      
+      - name: Run renew script
+        working-directory: scripts
+        env:
+          HEADLESS: 'true'
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Update README with Last Run Time
+        if: success()
+        working-directory: scripts
+        run: |
+          LAST_RUN=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+          echo "最后执行时间: $LAST_RUN"
+          # 直接强制覆盖第 1 行
+          sed -i "1c Last Check-in: $LAST_RUN (Beijing Time)" README.md
+
+      - name: Commit and Push Changes
+        if: success()
+        working-directory: scripts
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # 直接 add README，不判断内容是否变化
+          git add README.md          
+          git commit -m "docs: update status [skip ci]" && git push || echo "Nothing to push"
+      
+      
+      - name: Upload response JSON files
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: response-json
+          path: scripts/response_*.json
+          retention-days: 7
