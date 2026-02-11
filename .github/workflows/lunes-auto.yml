@@ -1,0 +1,50 @@
+name: lunes-AutoLogin
+
+on:
+  schedule:
+    # 每 7 天一次
+    # UTC 18:03（北京时间 02:03）
+    - cron: "03 18 */7 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ✅ 检出私库 lunes-auto
+      - name: Checkout private repo (lunes-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/lunes-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # 📦 系统依赖 + Python 依赖
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          pip install --upgrade pip
+          pip install -r requirements.txt -q
+
+      # 🚀 执行登录脚本
+      - name: Run lunes login script
+        working-directory: scripts
+        env:
+          LUNES_ACCOUNTS_BATCH: ${{ secrets.LUNES_ACCOUNTS_BATCH }}
+          HEADLESS: "true"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python login.py
