@@ -1,0 +1,49 @@
+name: Katabump-AutoRenew
+
+on:
+  schedule:
+    # UTC 19:12（北京时间 03:12）
+    - cron: "12 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ✅ 检出私库 katabump-auto
+      - name: Checkout private repo (katabump-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/katabump-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # 📦 安装系统依赖 + Python 依赖
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          pip install --upgrade pip
+          pip install -r requirements.txt -q
+
+      # 🚀 执行 Katabump 批量续期
+      - name: Run Katabump renew script
+        working-directory: scripts
+        env:
+          KATABUMP_BATCH: ${{ secrets.KATABUMP_BATCH }}
+          HEADLESS: "true"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python kataBump_renew_batch.py
