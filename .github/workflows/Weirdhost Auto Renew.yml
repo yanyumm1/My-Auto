@@ -3,7 +3,7 @@ name: Weirdhost-AutoRenew
 on:
   schedule:
     # 每天 UTC 时间 2:00（北京时间 10:00）
-    - cron: '0 2 * * *'
+    - cron: '14 17 * * *'
   workflow_dispatch:
 
 permissions:
