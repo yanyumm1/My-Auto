@@ -2,7 +2,7 @@ name: Greathost Auto Renew
 
 on:
   schedule:
-    - cron: '19 */11 * * *'
+    - cron: '19 */5 * * *'
   workflow_dispatch:
 
 permissions:
