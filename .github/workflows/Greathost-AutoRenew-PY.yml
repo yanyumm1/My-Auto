@@ -1,0 +1,73 @@
+name: Greathost-AutoRenew-PY
+
+on:
+  schedule:
+    - cron: '19 */11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  Auto_renew_greathost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+
+      # ✅ 检出当前仓库（运行脚本用）
+      - name: Checkout current repo
+        uses: actions/checkout@v4
+
+      # ✅ 检出私库（README 提交目标）
+      - name: Checkout private repo (greathost-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/greathost-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private_repo
+
+      # 1️⃣ Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 2️⃣ Chrome
+      - name: Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      # 3️⃣ 依赖
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium==4.18.1 selenium-wire==5.1.0 blinker==1.7.0 requests
+
+      # 4️⃣ 运行脚本
+      - name: Run renew script
+        env:
+          GREATHOST_EMAIL: ${{ secrets.GREATHOST_EMAIL }}
+          GREATHOST_PASSWORD: ${{ secrets.GREATHOST_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.CHAT_ID }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+        run: python greathost.py
+
+      # ✅ 把 README 复制到私库
+      - name: Copy README to private repo
+        if: always()
+        run: |
+          cp README.md private_repo/README.md
+
+      # ✅ 提交到私库
+      - name: Push README to private repo
+        if: always()
+        working-directory: private_repo
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add README.md
+          git commit -m "docs: update renewal status [skip ci]" || exit 0
+          git push
