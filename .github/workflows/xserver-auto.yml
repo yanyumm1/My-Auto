@@ -4,7 +4,7 @@ on:
   schedule:
     # UTC 00:15 & 12:15
     # 对应北京时间 08:15 & 20:15
-    - cron: "15 0,12 * * *"
+    - cron: "15 12 * * *"
   workflow_dispatch:
 
 permissions:
