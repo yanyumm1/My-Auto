@@ -1,0 +1,70 @@
+name: Hohai Daily Checkin
+
+on:
+  # ✅ 每天 UTC 18:30 自动运行
+  schedule:
+    - cron: '20 18 * * *'
+  
+  # ✅ 允许手动点 Run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # =========================
+      # 📥 检出私库 
+      # =========================
+      - name: Checkout private repo (hohai-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/hachimi-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # =========================
+      # 🐍 Python
+      # =========================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # =========================
+      # 📦 系统依赖
+      # =========================
+      - name: Install system dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            fonts-noto-cjk \
+            fonts-dejavu-core \
+            python3-tk \
+            python3-dev \
+            curl
+
+      # =========================
+      # 📦 Python 依赖
+      # =========================
+      - name: Install Python dependencies
+        working-directory: scripts
+        run: |
+          python -m pip install --upgrade pip
+          pip install -q seleniumbase pyvirtualdisplay requests
+
+      # =========================
+      # 🌟 执行 hachimi_checkin.py
+      # =========================
+      - name: Run Hohai Daily Checkin
+        working-directory: scripts
+        env:
+          HACHIMI_BATCH: ${{ secrets.HACHIMI_BATCH }}
+        run: |
+          python hachimi_checkin.py
