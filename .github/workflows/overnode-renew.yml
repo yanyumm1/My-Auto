@@ -1,0 +1,55 @@
+name: Overnode Auto Renew
+
+on:
+  schedule:
+    - cron: "17 */23 * * *" # 每 6 小时
+  workflow_dispatch:
+
+permissions:
+  contents: write   # ⚠️ 推送 README 必须
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # ✅ 私库检出（指定路径 scripts）
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/overnode-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # 设置 Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 安装依赖
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          pip install requests playwright beautifulsoup4
+          python -m playwright install chromium
+
+      # ▶️ 执行续期脚本
+      - name: Run auto renew
+        working-directory: scripts
+        env:
+          OVERNODE_BATCH: ${{ secrets.OVERNODE_BATCH }}
+          HEADLESS: "true"
+        run: python auto_renew.py
+
+      # 🚀 提交并推送 README
+      - name: Commit README
+        working-directory: scripts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add README.md || echo "No README changes"
+          git commit -m "chore: update overnode renewal status" || echo "Nothing to commit"
+          git push
