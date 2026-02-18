@@ -3,7 +3,7 @@ name: Host2Play Auto Renew
 on:
   workflow_dispatch:
   schedule:
-    # 每 8 小时执行一次
+    # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时，接近 7.5 小时
     - cron: "0 0,7,15,23 * * *"
 
 permissions:
@@ -40,8 +40,7 @@ jobs:
         working-directory: scripts
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            xvfb wget unzip curl jq p7zip-full
+          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full
 
       # =========================
       # 📡 安装 Hysteria2
@@ -98,10 +97,13 @@ jobs:
           xvfb-run -a node renew.js
 
       # =========================
-      # 📤 上传截图
+      # 📤 上传截图（路径修正）
       # =========================
-      - uses: actions/upload-artifact@v4
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: screenshots
-          path: screenshots/*
+          path: scripts/screenshots/*
+          if-no-files-found: warn
+          compression-level: 6
