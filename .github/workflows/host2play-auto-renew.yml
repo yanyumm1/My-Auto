@@ -104,6 +104,6 @@ jobs:
         if: always()
         with:
           name: screenshots
-          path: scripts/screenshots/*
+          path: scripts/screenshots/**
           if-no-files-found: warn
           compression-level: 6
