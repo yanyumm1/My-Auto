@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # 每天 0:00 / 8:00 / 16:00 UTC，间隔约 8 小时，接近 7.5 小时
-    - cron: "0 0,7,14,21 * * *"
+    - cron: "20 4,10,16,22 * * *"
 
 permissions:
   contents: read
