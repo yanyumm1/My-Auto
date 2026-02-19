@@ -2,7 +2,7 @@ name: Cleanup Old Workflow Runs
 
 on:
   schedule:
-    - cron: '0 3 * * 5' # 每周一 UTC 03:00
+    - cron: '0 3 * * 5' # 每周一 UTC 03:00（北京时间 11:00）
   workflow_dispatch:
 
 permissions:
@@ -38,27 +38,27 @@ jobs:
           echo "📦 Cleaning old workflow runs..."
           runs=$(gh api repos/$REPO/actions/runs --jq ".workflow_runs[] | select(.created_at < \"$cutoff\") | .id")
           if [ -z "$runs" ]; then
-            LOG_BODY="$LOG_BODY- No old workflow runs to delete\n"
+            LOG_BODY="$LOG_BODY\t• No old workflow runs to delete\n"
           else
             for run_id in $runs; do
               gh api -X DELETE repos/$REPO/actions/runs/$run_id
-              LOG_BODY="$LOG_BODY- Deleted workflow run $run_id\n"
+              LOG_BODY="$LOG_BODY\t• Deleted workflow run $run_id\n"
             done
           fi
 
           echo "📦 Cleaning old artifacts..."
           artifacts=$(gh api repos/$REPO/actions/artifacts --jq ".artifacts[] | select(.created_at < \"$cutoff\") | .id")
           if [ -z "$artifacts" ]; then
-            LOG_BODY="$LOG_BODY- No old artifacts to delete\n"
+            LOG_BODY="$LOG_BODY\t• No old artifacts to delete\n"
           else
             for art_id in $artifacts; do
               gh api -X DELETE repos/$REPO/actions/artifacts/$art_id
-              LOG_BODY="$LOG_BODY- Deleted artifact $art_id\n"
+              LOG_BODY="$LOG_BODY\t• Deleted artifact $art_id\n"
             done
           fi
 
-          # 生成新日志块
-          LOG="### Cleanup Log ($(date '+%Y-%m-%d %H:%M:%S'))\n$LOG_BODY"
+          # 生成新日志块（北京时间）
+          LOG="### Cleanup Log ($(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S'))\n$LOG_BODY"
 
           README="repo/README.md"
           if [ -f "$README" ]; then
