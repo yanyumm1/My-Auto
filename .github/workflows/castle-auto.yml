@@ -1,0 +1,48 @@
+name: Castle Host Auto Renew
+
+on:
+  schedule:
+    # UTC 18:20 每天触发
+    - cron: "20 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ✅ 检出私有仓库 castle-auto
+      - name: Checkout private repo (castle-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/castle-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # 🐍 安装 Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 📦 安装系统依赖 + Python 依赖
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          pip install --upgrade pip
+          pip install -r requirements.txt -q
+
+      # 🚀 执行 Castle Host 批量续期
+      - name: Run Castle Host renew script
+        working-directory: scripts
+        env:
+          CASTLE_BATCH: ${{ secrets.CASTLE_BATCH }}
+          HEADLESS: "true"
+        run: |
+          python castle_renew_batch.py
