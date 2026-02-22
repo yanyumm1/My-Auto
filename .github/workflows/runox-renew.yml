@@ -1,0 +1,55 @@
+name: Runox Auto Start
+
+on:
+  # 每 3 小时触发一次
+  schedule:
+    - cron: "0 */3 * * *"  # UTC 时间
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  runox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # 📥 检出私有仓库
+      - name: Checkout private repo (runox-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/runox-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # 🐍 安装 Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # 📦 安装系统依赖 + Python 依赖
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xdotool
+          pip install --upgrade pip
+          pip install -r requirements.txt -q
+
+      # 🚀 执行 Runox 自动启动脚本
+      - name: Run Runox script
+        working-directory: scripts
+        env:
+          RUNOX_BATCH: ${{ secrets.RUNOX_BATCH }}
+        run: |
+          python runox_renew_batch.py
+
+      # 📸 上传 debug 截图
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runox-debug-screenshots
+          path: scripts/screenshots/*.png
