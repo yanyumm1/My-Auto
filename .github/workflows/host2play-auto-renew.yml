@@ -16,7 +16,7 @@ jobs:
 
     steps:
       # =========================
-      # 📥 检出私库 Host2Play 脚本
+      # 📥 检出
       # =========================
       - name: Checkout private repo (Host2Play)
         uses: actions/checkout@v4
@@ -65,9 +65,9 @@ jobs:
           npx playwright install --with-deps chromium
 
       # =========================
-      # 📦 下载 NopeCHA 扩展
+      # 📦 下载 扩展
       # =========================
-      - name: Download NopeCHA extension (chromium.zip)
+      - name: Download  extension (chromium.zip)
         working-directory: scripts
         run: |
           mkdir -p extensions/nopecha
