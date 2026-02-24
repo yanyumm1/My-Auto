@@ -1,0 +1,40 @@
+name: Ikuuu Auto Checkin
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 每天 UTC 16:00 运行（北京时间 00:00）
+    - cron: "0 16 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # ✅ 检出私库
+      - name: Checkout private repo (ikuuu-auto)
+        uses: actions/checkout@v4
+
+      # 🐍 安装 Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 📦 安装依赖
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4
+
+      # 🚀 运行脚本
+      - name: Run Checkin Script
+        env:
+          IKUUU_EMAIL: ${{ secrets.IKUUU_EMAIL }}
+          IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}
+        run: |
+          python main.py
