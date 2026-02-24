@@ -1,0 +1,58 @@
+name: skybots Auto Renew
+
+on:
+  schedule:
+    - cron: "12 18 */3 * *"   
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ✅ 检出私库 skybots-auto
+      - name: Checkout private repo (skybots-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/skybots-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # 🐍 安装 Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # 📦 安装系统依赖 + Python 依赖
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          pip install --upgrade pip
+          pip install -r requirements.txt -q
+
+      # 🚀 执行 skybots 批量续期
+      - name: Run skybots renew script
+        working-directory: scripts
+        env:
+          SKYBOTS_BATCH: ${{ secrets.SKYBOTS_BATCH }}
+          HEADLESS: "true"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python skybots_renew_batch.py
+
+      # 📸 上传截图（无论成功或失败）
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skybots-renew-screenshots
+          path: |
+            scripts/screenshots/*.png
