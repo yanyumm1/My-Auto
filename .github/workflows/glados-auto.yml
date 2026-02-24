@@ -1,0 +1,32 @@
+name: Glados Auto Checkin
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '10 16 * * *'   # 每天 UTC 16:10 （北京时间 00:10）
+
+permissions:
+  contents: read
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run Glados Script
+        env:
+          GLADOS_COOKIE: ${{ secrets.GLADOS_COOKIE }}
+        run: python glados.py
