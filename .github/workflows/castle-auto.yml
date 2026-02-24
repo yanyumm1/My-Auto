@@ -3,7 +3,7 @@ name: Castle Host Auto Renew
 on:
   schedule:
     # UTC 18:20 每天触发
-    - cron: "20 16 * * *"
+    - cron: "33 21 * * *"
   workflow_dispatch:
 
 permissions:
