@@ -37,4 +37,4 @@ jobs:
           IKUUU_EMAIL: ${{ secrets.IKUUU_EMAIL }}
           IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}
         run: |
-          python main.py
+          python ikuuu.py
