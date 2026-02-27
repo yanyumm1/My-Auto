@@ -22,13 +22,13 @@ jobs:
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      # 🐍 Python
+      # 🐍 安装 Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # 📦 系统依赖（已修复 libasound2）
+      # 📦 安装系统依赖（适配 Ubuntu 24.04）
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -48,7 +48,7 @@ jobs:
             libpangocairo-1.0-0 \
             libgtk-3-0
 
-      # 📦 Python依赖
+      # 📦 安装 Python 依赖
       - name: Install Python dependencies
         working-directory: scripts
         run: |
@@ -60,6 +60,20 @@ jobs:
         run: |
           playwright install --with-deps
 
+      # 💾 缓存 Camoufox 浏览器（避免重复访问 GitHub API）
+      - name: Cache Camoufox
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/camoufox
+          key: camoufox-${{ runner.os }}
+
+      # 🚀 预下载 Camoufox（带 GitHub Token 防限流）
+      - name: Pre-install Camoufox
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -m camoufox fetch
+
       # 🚀 运行脚本
       - name: Run SkyBots Renew Script
         working-directory: scripts
@@ -69,5 +83,6 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PROXY_URL: ${{ secrets.PROXY_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python skybots_renew_batch.py
