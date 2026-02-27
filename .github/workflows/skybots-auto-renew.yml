@@ -11,7 +11,7 @@ permissions:
 jobs:
   renew:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
 
     steps:
       # ✅ 拉取私有仓库
@@ -48,7 +48,7 @@ jobs:
             libpangocairo-1.0-0 \
             libgtk-3-0
 
-      # 📦 安装 Python 依赖
+      # 📦 安装 Python 依赖（只装 Camoufox）
       - name: Install Python dependencies
         working-directory: scripts
         run: |
@@ -60,7 +60,7 @@ jobs:
         run: |
           playwright install --with-deps
 
-      # 💾 缓存 Camoufox 浏览器（避免重复访问 GitHub API）
+      # 💾 缓存 Camoufox
       - name: Cache Camoufox
         uses: actions/cache@v4
         with:
@@ -74,7 +74,7 @@ jobs:
         run: |
           python -m camoufox fetch
 
-      # 🚀 运行脚本
+      # 🚀 运行 SkyBots 脚本（带重试，避免网络临时断开）
       - name: Run SkyBots Renew Script
         working-directory: scripts
         env:
@@ -85,4 +85,6 @@ jobs:
           PROXY_URL: ${{ secrets.PROXY_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python skybots_renew_batch.py
+          for i in {1..3}; do
+            python skybots_renew_batch.py && break || echo "⚠️ 重试 $i 次"
+          done
