@@ -1,20 +1,20 @@
-name: skybots Auto Renew
+name: SkyBots Auto Renew
 
 on:
   schedule:
-    - cron: "12 18 */3 * *"   
+    - cron: "12 18 */3 * *"   # 每3天一次（UTC）
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   renew:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
-      # ✅ 检出私库 skybots-auto
+      # ✅ 检出私有仓库 skybots-auto
       - name: Checkout private repo (skybots-auto)
         uses: actions/checkout@v4
         with:
@@ -28,20 +28,46 @@ jobs:
         with:
           python-version: "3.10"
 
-      # 📦 安装系统依赖 + Python 依赖
-      - name: Install dependencies
-        working-directory: scripts
+      # 📦 安装系统依赖
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb
+          sudo apt-get install -y \
+            xvfb \
+            libnss3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libasound2 \
+            libpangocairo-1.0-0 \
+            libgtk-3-0
+
+      # 📦 安装 Python 依赖
+      - name: Install Python dependencies
+        working-directory: scripts
+        run: |
           pip install --upgrade pip
           pip install -r requirements.txt -q
 
-      # 🚀 执行 skybots 批量续期
-      - name: Run skybots renew script
+      # 🌐 安装 Playwright 依赖
+      - name: Install Playwright browsers
+        run: |
+          playwright install --with-deps
+
+      # 🚀 执行续期脚本
+      - name: Run SkyBots Renew Script
         working-directory: scripts
         env:
-          SKYBOTS_BATCH: ${{ secrets.SKYBOTS_BATCH }}
-          HEADLESS: "true"
+          ACCOUNT_EMAIL: ${{ secrets.ACCOUNT_EMAIL }}
+          ACCOUNT_PASSWORD: ${{ secrets.ACCOUNT_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
-          python skybots_renew_batch.py
+          python skybots_renew.py
