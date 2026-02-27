@@ -48,19 +48,19 @@ jobs:
             libpangocairo-1.0-0 \
             libgtk-3-0
 
-      # 📦 安装 Python 依赖（只装 Camoufox）
+      # 📦 安装 Python 依赖（全部在 yml 里，不用 requirements.txt）
       - name: Install Python dependencies
         working-directory: scripts
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt -q
+          pip install camoufox[full] -q
 
-      # 🌐 安装 Playwright 浏览器
+      # 🌐 安装 Playwright 浏览器（Camoufox 需要）
       - name: Install Playwright browsers
         run: |
           playwright install --with-deps
 
-      # 💾 缓存 Camoufox
+      # 💾 缓存 Camoufox 浏览器，避免每次重复下载
       - name: Cache Camoufox
         uses: actions/cache@v4
         with:
@@ -74,7 +74,7 @@ jobs:
         run: |
           python -m camoufox fetch
 
-      # 🚀 运行 SkyBots 脚本（带重试，避免网络临时断开）
+      # 🚀 运行 SkyBots 脚本（带重试，避免网络临时断开失败）
       - name: Run SkyBots Renew Script
         working-directory: scripts
         env:
