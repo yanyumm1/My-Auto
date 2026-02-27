@@ -14,21 +14,21 @@ jobs:
     timeout-minutes: 40
 
     steps:
-      # ✅ 检出私有仓库 skybots-auto
-      - name: Checkout private repo (skybots-auto)
+      # ✅ 拉取私有仓库
+      - name: Checkout private repo
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/skybots-auto
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      # 🐍 安装 Python
+      # 🐍 Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # 📦 安装系统依赖
+      # 📦 系统依赖（已修复 libasound2）
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -44,23 +44,23 @@ jobs:
             libxfixes3 \
             libxrandr2 \
             libgbm1 \
-            libasound2 \
+            libasound2t64 \
             libpangocairo-1.0-0 \
             libgtk-3-0
 
-      # 📦 安装 Python 依赖
+      # 📦 Python依赖
       - name: Install Python dependencies
         working-directory: scripts
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt -q
 
-      # 🌐 安装 Playwright 依赖
+      # 🌐 安装 Playwright 浏览器
       - name: Install Playwright browsers
         run: |
           playwright install --with-deps
 
-      # 🚀 执行续期脚本
+      # 🚀 运行脚本
       - name: Run SkyBots Renew Script
         working-directory: scripts
         env:
@@ -70,4 +70,4 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
-          python skybots_renew.py
+          python skybots_renew_batch.py
