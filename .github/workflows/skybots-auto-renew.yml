@@ -2,7 +2,7 @@ name: SkyBots Auto Renew
 
 on:
   schedule:
-    - cron: "12 18 */3 * *"   # 每3天一次（UTC）
+    - cron: "12 18 */2 * *"   # 每3天一次（UTC）
   workflow_dispatch:
 
 permissions:
