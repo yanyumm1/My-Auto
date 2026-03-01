@@ -2,7 +2,7 @@ name: My-Skybots.tech-AutoRenew
 
 on:
   schedule:
-    - cron: '0 4 */2 * *'
+    - cron: '14 18 * * *'
   workflow_dispatch:
 
 permissions:
