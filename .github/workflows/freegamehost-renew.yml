@@ -1,0 +1,48 @@
+name: FreeGameHost-AutoRenew
+
+on:
+  schedule:
+    # 每 5 小时执行一次
+    - cron: "0 */5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ✅ 检出私库 freegamehost-auto
+      - name: Checkout private repo (freegamehost-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/freegamehost-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # 🐍 安装 Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 📦 安装系统依赖 + Python 依赖
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          pip install --upgrade pip
+          pip install -r requirements.txt -q
+          seleniumbase install chromedriver
+
+      # 🚀 执行 FreeGameHost 批量续期
+      - name: Run FreeGameHost renew script
+        working-directory: scripts
+        env:
+          FREEGAMEHOST_BATCH: ${{ secrets.FREEGAMEHOST_BATCH }}
+        run: |
+          python main.py
