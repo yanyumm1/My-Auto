@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         working-directory: scripts
         run: |
-          pip install requests beautifulsoup4
+          pip install requests beautifulsoup4 cloudscraper
 
       # 🚀 运行脚本
       - name: Run Ikuuu Checkin Script
