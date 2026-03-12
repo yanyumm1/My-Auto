@@ -1,0 +1,10 @@
+[
+  {
+    "name": "connect.sid",
+    "value": "xxxxx",
+    "domain": ".bot-hosting.net",
+    "path": "/",
+    "httpOnly": true,
+    "secure": true
+  }
+]
