@@ -1,0 +1,62 @@
+name: FreeMCServer-AutoRenew
+
+on:
+  schedule:
+    # 每3小时执行
+    - cron: "0 */3 * * *"
+  workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ✅ 检出私库脚本
+      - name: Checkout private repo (freemcserver-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/freemcserver-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # 🐍 Python 环境
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 📦 安装系统依赖
+      - name: Install system packages
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb curl fonts-noto-cjk
+
+      # 🚀 安装 Hysteria2
+      - name: Install Hysteria2
+        working-directory: scripts
+        run: |
+          curl -L -o hysteria \
+          https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
+          chmod +x hysteria
+          sudo mv hysteria /usr/local/bin/hysteria
+          hysteria version
+
+      # 📦 安装 Python 依赖
+      - name: Install dependencies
+        working-directory: scripts
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -q
+
+      # 🤖 执行续期脚本
+      - name: Run FreeMCServer renew
+        working-directory: scripts
+        env:
+          FMC_BATCH: ${{ secrets.FMC_BATCH }}
+        run: |
+          python main.py
