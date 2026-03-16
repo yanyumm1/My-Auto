@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # ✅ 检出私库脚本
+      # ✅ 检出
       - name: Checkout private repo (freemcserver-auto)
         uses: actions/checkout@v4
         with:
