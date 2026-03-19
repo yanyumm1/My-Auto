@@ -34,7 +34,7 @@ jobs:
         working-directory: scripts
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb xdotool
+          sudo apt-get install -y xvfb
           pip install --upgrade pip
           pip install -r requirements.txt -q
 
