@@ -53,3 +53,4 @@ jobs:
         with:
           name: runox-debug-screenshots
           path: scripts/screenshots/*.png
+          if-no-files-found: ignore
