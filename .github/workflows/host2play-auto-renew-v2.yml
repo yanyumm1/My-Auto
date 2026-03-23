@@ -20,8 +20,8 @@ jobs:
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/auto-renew-script
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          repository: ${{ github.repository_owner }}/host2play-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}   
           path: scripts
 
       # =========================
@@ -72,7 +72,7 @@ jobs:
   "inbounds": [
     {
       "type": "http",
-      "tag": "local-in",
+      "tag": "local_in",
       "listen": "127.0.0.1",
       "listen_port": 10808
     }
@@ -80,12 +80,12 @@ jobs:
   "outbounds": [
     {
       "type": "hysteria2",
-      "tag": "hy2-out",
+      "tag": "hy2_out",
       "server": "38.58.180.137",
       "server_port": 3003,
       "password": "0a6568ff-ea3c-4271-9020-450560e10d63",
       "tls": true,
-      "sni": "example.com"
+      "sni": "www.bing.com"
     }
   ]
 }
@@ -120,9 +120,9 @@ EOF
       - name: Run Renew Script
         working-directory: scripts
         env:
-          HOST2_RENEW_URL: ${{ secrets.HOST2_RENEW_URL }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          HOST2_RENEW_URL: ${{ secrets.HOST2_RENEW_URL }}         # ✅ Secret: HOST2_RENEW_URL
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}   # ✅ Secret: TELEGRAM_BOT_TOKEN
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}       # ✅ Secret: TELEGRAM_CHAT_ID
           PROXY: http://127.0.0.1:10808
         run: |
           mkdir -p screenshots
@@ -135,6 +135,6 @@ EOF
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: debug-screenshots
+          name: debug_screenshots
           path: scripts/*.html
           retention-days: 5
