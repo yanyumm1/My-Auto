@@ -1,4 +1,4 @@
-name: Auto Renew host2 Server Script (Hysteria2 HY2)
+name: Auto Renew host2 Server Script (Hysteria2 HY2 URI)
 
 on:
   workflow_dispatch:
@@ -58,14 +58,24 @@ jobs:
           hysteria version
 
       # =========================
-      # 📄 写入 Hysteria2 配置 (base64 Secret)
+      # 📄 写入 Hysteria2 配置 (使用 URI Secret)
       # =========================
-      - name: Write Hysteria2 config from Secret
+      - name: Write hysteria_config.json from URI Secret
         working-directory: scripts
         env:
-          HYSTERIA_JSON_BASE64: ${{ secrets.HYSTERIA_JSON_BASE64 }}
+          HYSTERIA_URI: ${{ secrets.HYSTERIA_URI }}
         run: |
-          echo "$HYSTERIA_JSON_BASE64" | base64 -d > hysteria_config.json
+          cat > hysteria_config.json <<EOF
+{
+  "log": { "level": "warning" },
+  "inbounds": [
+    { "type": "http", "listen": "127.0.0.1", "listen_port": 10808 }
+  ],
+  "outbounds": [
+    { "type": "hysteria2", "uri": "$HYSTERIA_URI" }
+  ]
+}
+EOF
           echo "📌 hysteria_config.json:"
           cat hysteria_config.json
 
