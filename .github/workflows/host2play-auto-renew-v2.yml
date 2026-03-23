@@ -1,4 +1,4 @@
-name: Auto Renew host2 Server Script (sing-box HY2)
+name: Auto Renew host2 Server Script (hysteria2 URL)
 
 on:
   workflow_dispatch:
@@ -42,68 +42,34 @@ jobs:
           sudo apt-get install -y xvfb ffmpeg unzip curl wget jq
 
       # =========================
-      # 📡 安装 Sing-box
+      # 📡 安装 Hysteria2 客户端
       # =========================
-      - name: Install Sing-box
+      - name: Install Hysteria2 client
         working-directory: scripts
         run: |
-          curl -L -o sing-box \
-            https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-linux-amd64
-          chmod +x sing-box
-          sudo mv sing-box /usr/local/bin/
-          sing-box version
+          curl -L -o hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
+          chmod +x hysteria
+          sudo mv hysteria /usr/local/bin/
+          hysteria version
 
       # =========================
-      # 📄 生成 singbox_config.json（使用变量）
+      # 🚀 启动 Hysteria2 本地代理
       # =========================
-      - name: Generate singbox_config.json
+      - name: Run Hysteria2 client
         working-directory: scripts
         env:
-          HY2_SERVER: ${{ secrets.HY2_SERVER }}        # 节点 IP
-          HY2_PORT: ${{ secrets.HY2_PORT }}            # 节点端口
-          HY2_PASSWORD: ${{ secrets.HY2_PASSWORD }}    # 节点密码
-          HY2_SNI: ${{ secrets.HY2_SNI }}              # TLS SNI
+          HYSTERIA_URL: ${{ secrets.HYSTERIA_URL }}   # hysteria2://xxxxx
         run: |
-          cat > singbox_config.json <<EOF
-{
-  "log": { "level": "warning" },
-  "inbounds": [
-    {
-      "type": "http",
-      "tag": "local-in",
-      "listen": "127.0.0.1",
-      "listen_port": 10808
-    }
-  ],
-  "outbounds": [
-    {
-      "type": "hysteria2",
-      "tag": "hy2-out",
-      "server": "${HY2_SERVER}",
-      "server_port": ${HY2_PORT},
-      "password": "${HY2_PASSWORD}",
-      "tls": true,
-      "sni": "${HY2_SNI}"
-    }
-  ]
-}
-EOF
-
-      # =========================
-      # 🚀 启动 Sing-box 并检测代理
-      # =========================
-      - name: Run Sing-box
-        working-directory: scripts
-        run: |
-          nohup sing-box run -c singbox_config.json > singbox.log 2>&1 &
-          echo "⏳ Waiting for Sing-box to start..."
+          echo "⬇️ Starting Hysteria2 client..."
+          nohup hysteria client --listen 127.0.0.1:10808 --server-url "${HYSTERIA_URL}" > hysteria.log 2>&1 &
           sleep 5
+          echo "⏳ Waiting for Hysteria2 to start..."
           echo "🌐 Proxy test:"
           if curl -x http://127.0.0.1:10808 -I https://www.google.com/generate_204 --max-time 10; then
             echo "✅ Proxy OK"
           else
             echo "❌ Proxy failed"
-            cat singbox.log
+            cat hysteria.log
             exit 1
           fi
 
