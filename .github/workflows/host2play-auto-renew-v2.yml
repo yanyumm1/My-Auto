@@ -1,81 +1,64 @@
-name: auto_renew_hy2
+name: Auto Renew host2play (HY2)
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # 每 6 小时执行一次
+
+permissions:
+  contents: read
 
 jobs:
-  run_renew:
+  run-renew:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
-      - name: checkout_repo
+      # ---------------- 私库拉取 ----------------
+      - name: Checkout private repo
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/host2play-auto
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      - name: setup_python
+      # ---------------- 安装 Python ----------------
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      - name: install_dependencies
+      # ---------------- 系统依赖 ----------------
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg unzip curl wget google-chrome-stable
+          sudo apt-get install -y xvfb ffmpeg unzip curl wget
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
 
-      - name: install_hysteria
+      # ---------------- 安装 Hysteria2 ----------------
+      - name: Install Hysteria2 client
         run: |
           curl -L -o hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
           chmod +x hysteria
           sudo mv hysteria /usr/local/bin/
           hysteria version
 
-      - name: write_hysteria_config
-        env:
-          HYSTERIA_URI: ${{ secrets.HYSTERIA_URI }}
+      # ---------------- Python依赖 ----------------
+      - name: Install Python dependencies
+        working-directory: scripts
         run: |
-          cd scripts
-          cat > hysteria_config.json <<EOF
-{
-  "log": { "level": "warning" },
-  "inbounds": [
-    { "type": "http", "listen": "127.0.0.1", "listen_port": 10808 }
-  ],
-  "outbounds": [
-    { "type": "hysteria2", "uri": "$HYSTERIA_URI" }
-  ]
-}
-EOF
-
-      - name: run_hysteria
-        run: |
-          cd scripts
-          nohup hysteria client -c hysteria_config.json > hysteria.log 2>&1 &
-          sleep 5
-          curl -x http://127.0.0.1:10808 -I https://www.google.com/generate_204 || true
-
-      - name: install_python_packages
-        run: |
-          cd scripts
           python -m pip install --upgrade pip
           pip install DrissionPage xvfbwrapper requests SpeechRecognition pydub
 
-      - name: run_renew_script
+      # ---------------- 执行续期脚本 ----------------
+      - name: Run renew script
+        working-directory: scripts
         env:
           HOST2_RENEW_URL: ${{ secrets.HOST2_RENEW_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PROXY: http://127.0.0.1:10808
+          HY2_URL: ${{ secrets.HY2_URL }}
         run: |
-          cd scripts
-          mkdir -p screenshots
           xvfb-run -a python main.py
-
-      - name: upload_debug
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: debug_screenshots
-          path: scripts/*.html
-          retention-days: 5
