@@ -1,4 +1,4 @@
-name: Auto Renew host2 Server Script (hysteria2 URL)
+name: Auto Renew host2 Server Script (Hysteria2 JSON Secret)
 
 on:
   workflow_dispatch:
@@ -53,17 +53,24 @@ jobs:
           hysteria version
 
       # =========================
-      # 🚀 启动 Hysteria2 本地代理
+      # 📄 写入 Hysteria2 JSON 配置
+      # =========================
+      - name: Write Hysteria2 config from Secret
+        working-directory: scripts
+        env:
+          HYSTERIA_JSON: ${{ secrets.HYSTERIA_JSON }}
+        run: |
+          echo "$HYSTERIA_JSON" > hysteria_config.json
+
+      # =========================
+      # 🚀 启动 Hysteria2 客户端
       # =========================
       - name: Run Hysteria2 client
         working-directory: scripts
-        env:
-          HYSTERIA_URL: ${{ secrets.HYSTERIA_URL }}   # hysteria2://xxxxx
         run: |
-          echo "⬇️ Starting Hysteria2 client..."
-          nohup hysteria client --listen 127.0.0.1:10808 --server-url "${HYSTERIA_URL}" > hysteria.log 2>&1 &
-          sleep 5
+          nohup hysteria client -c hysteria_config.json > hysteria.log 2>&1 &
           echo "⏳ Waiting for Hysteria2 to start..."
+          sleep 5
           echo "🌐 Proxy test:"
           if curl -x http://127.0.0.1:10808 -I https://www.google.com/generate_204 --max-time 10; then
             echo "✅ Proxy OK"
@@ -83,7 +90,7 @@ jobs:
           pip install DrissionPage xvfbwrapper requests SpeechRecognition pydub
 
       # =========================
-      # ▶️ 运行续费脚本
+      # ▶️ 运行续期脚本
       # =========================
       - name: Run Renew Script
         working-directory: scripts
