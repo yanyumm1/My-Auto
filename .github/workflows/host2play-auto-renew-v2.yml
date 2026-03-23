@@ -1,70 +1,52 @@
-name: Auto Renew host2 Server Script (Hysteria2 HY2 URI)
+name: auto_renew_hy2
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'  # 每 6 小时运行一次
+    - cron: '0 */6 * * *'
 
 permissions:
   contents: read
 
 jobs:
-  run-renew:
+  run_renew:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
-      # =========================
-      # 📥 拉取私有仓库
-      # =========================
-      - name: Checkout private repo
+      - name: checkout_repo
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/host2play-auto
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}   
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      # =========================
-      # 🐍 Python
-      # =========================
-      - name: Set up Python
+      - name: setup_python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # =========================
-      # 📦 系统依赖
-      # =========================
-      - name: Install System Dependencies
-        working-directory: scripts
+      - name: install_dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb ffmpeg unzip curl wget
-
           wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
           sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
-      # =========================
-      # 📡 安装 Hysteria2
-      # =========================
-      - name: Install Hysteria2 client
-        working-directory: scripts
+      - name: install_hysteria
         run: |
           curl -L -o hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
           chmod +x hysteria
           sudo mv hysteria /usr/local/bin/
           hysteria version
 
-      # =========================
-      # 📄 写入 Hysteria2 配置 (使用 URI Secret)
-      # =========================
-      - name: Write hysteria_config.json from URI Secret
-        working-directory: scripts
+      - name: write_hysteria_config
         env:
           HYSTERIA_URI: ${{ secrets.HYSTERIA_URI }}
         run: |
+          cd scripts
           cat > hysteria_config.json <<EOF
 {
   "log": { "level": "warning" },
@@ -76,50 +58,32 @@ jobs:
   ]
 }
 EOF
-          echo "📌 hysteria_config.json:"
-          cat hysteria_config.json
 
-      # =========================
-      # 🚀 启动 Hysteria2 client
-      # =========================
-      - name: Run Hysteria2 client
-        working-directory: scripts
+      - name: run_hysteria
         run: |
+          cd scripts
           nohup hysteria client -c hysteria_config.json > hysteria.log 2>&1 &
-          echo "⏳ Waiting for Hysteria2 to start..."
           sleep 5
-          echo "🌐 Proxy test:"
           curl -x http://127.0.0.1:10808 -I https://www.google.com/generate_204 || true
-          echo "📄 hysteria.log:"
-          cat hysteria.log
 
-      # =========================
-      # 📦 Python依赖
-      # =========================
-      - name: Install Python Dependencies
-        working-directory: scripts
+      - name: install_python_packages
         run: |
+          cd scripts
           python -m pip install --upgrade pip
           pip install DrissionPage xvfbwrapper requests SpeechRecognition pydub
 
-      # =========================
-      # ▶️ 运行续期脚本
-      # =========================
-      - name: Run Renew Script
-        working-directory: scripts
+      - name: run_renew_script
         env:
           HOST2_RENEW_URL: ${{ secrets.HOST2_RENEW_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PROXY: http://127.0.0.1:10808
         run: |
+          cd scripts
           mkdir -p screenshots
           xvfb-run -a python main.py
 
-      # =========================
-      # 📤 上传调试文件
-      # =========================
-      - name: Upload Error Screenshots
+      - name: upload_debug
         uses: actions/upload-artifact@v4
         if: always()
         with:
