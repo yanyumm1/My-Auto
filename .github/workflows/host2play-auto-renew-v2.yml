@@ -1,0 +1,107 @@
+name: Auto Renew Host2 Server Script
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  run-renew:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      # =========================
+      # 📥 拉取私有仓库
+      # =========================
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/host2play-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # =========================
+      # 🐍 Python
+      # =========================
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # =========================
+      # 📦 系统依赖
+      # =========================
+      - name: Install System Dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg unzip curl wget
+
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      # =========================
+      # 🚀 安装并运行 Xray
+      # =========================
+      - name: Install and Run Xray
+        working-directory: scripts
+        env:
+          V2RAY_CONFIG: ${{ secrets.V2RAY_CONFIG }}
+        run: |
+          echo "⬇️ Downloading Xray-core..."
+          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+          unzip -q Xray-linux-64.zip -d xray_bin
+
+          echo "📝 Writing config..."
+          echo "$V2RAY_CONFIG" > xray_bin/config.json
+
+          echo "🚀 Starting Xray..."
+          cd xray_bin
+          nohup ./xray run -c config.json > xray.log 2>&1 &
+          cd ..
+
+          echo "⏳ Waiting for Xray..."
+          sleep 5
+
+          echo "🌐 Proxy test..."
+          curl -x http://127.0.0.1:10808 -I https://www.google.com/generate_204 || true
+
+      # =========================
+      # 📦 Python依赖
+      # =========================
+      - name: Install Python Dependencies
+        working-directory: scripts
+        run: |
+          python -m pip install --upgrade pip
+          pip install DrissionPage xvfbwrapper requests SpeechRecognition pydub
+
+      # =========================
+      # ▶️ 运行续期脚本
+      # =========================
+      - name: Run Renew Script
+        working-directory: scripts
+        env:
+          HOST2_RENEW_URL: ${{ secrets.HOST2_RENEW_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PROXY: http://127.0.0.1:10808
+        run: |
+          mkdir -p screenshots
+          python main.py
+
+      # =========================
+      # 📤 上传调试文件
+      # =========================
+      - name: Upload Error Screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debug-screenshots
+          path: scripts/*.html
+          retention-days: 5
