@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/host2play-auto
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}   
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
       # =========================
@@ -39,12 +39,7 @@ jobs:
         working-directory: scripts
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg unzip curl wget
-
-          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
+          sudo apt-get install -y xvfb ffmpeg unzip curl wget jq
 
       # =========================
       # 📡 安装 Sing-box
@@ -59,20 +54,23 @@ jobs:
           sing-box version
 
       # =========================
-      # 📄 写入 Sing-box 配置
+      # 📄 生成 singbox_config.json（使用变量）
       # =========================
-      - name: Write Sing-box HY2 config
+      - name: Generate singbox_config.json
         working-directory: scripts
+        env:
+          HY2_SERVER: ${{ secrets.HY2_SERVER }}        # 节点 IP
+          HY2_PORT: ${{ secrets.HY2_PORT }}            # 节点端口
+          HY2_PASSWORD: ${{ secrets.HY2_PASSWORD }}    # 节点密码
+          HY2_SNI: ${{ secrets.HY2_SNI }}              # TLS SNI
         run: |
           cat > singbox_config.json <<EOF
 {
-  "log": {
-    "level": "warning"
-  },
+  "log": { "level": "warning" },
   "inbounds": [
     {
       "type": "http",
-      "tag": "local_in",
+      "tag": "local-in",
       "listen": "127.0.0.1",
       "listen_port": 10808
     }
@@ -80,30 +78,34 @@ jobs:
   "outbounds": [
     {
       "type": "hysteria2",
-      "tag": "hy2_out",
-      "server": "38.58.180.137",
-      "server_port": 3003,
-      "password": "0a6568ff-ea3c-4271-9020-450560e10d63",
+      "tag": "hy2-out",
+      "server": "${HY2_SERVER}",
+      "server_port": ${HY2_PORT},
+      "password": "${HY2_PASSWORD}",
       "tls": true,
-      "sni": "www.bing.com"
+      "sni": "${HY2_SNI}"
     }
   ]
 }
 EOF
 
       # =========================
-      # 🚀 启动 Sing-box
+      # 🚀 启动 Sing-box 并检测代理
       # =========================
       - name: Run Sing-box
         working-directory: scripts
         run: |
           nohup sing-box run -c singbox_config.json > singbox.log 2>&1 &
-          echo "⏳ Waiting for Sing-box..."
+          echo "⏳ Waiting for Sing-box to start..."
           sleep 5
           echo "🌐 Proxy test:"
-          curl -x http://127.0.0.1:10808 -I https://www.google.com/generate_204 || true
-          echo "📄 Sing-box log:"
-          cat singbox.log
+          if curl -x http://127.0.0.1:10808 -I https://www.google.com/generate_204 --max-time 10; then
+            echo "✅ Proxy OK"
+          else
+            echo "❌ Proxy failed"
+            cat singbox.log
+            exit 1
+          fi
 
       # =========================
       # 📦 Python依赖
@@ -115,14 +117,14 @@ EOF
           pip install DrissionPage xvfbwrapper requests SpeechRecognition pydub
 
       # =========================
-      # ▶️ 运行续期脚本
+      # ▶️ 运行续费脚本
       # =========================
       - name: Run Renew Script
         working-directory: scripts
         env:
-          HOST2_RENEW_URL: ${{ secrets.HOST2_RENEW_URL }}         # ✅ Secret: HOST2_RENEW_URL
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}   # ✅ Secret: TELEGRAM_BOT_TOKEN
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}       # ✅ Secret: TELEGRAM_CHAT_ID
+          HOST2_RENEW_URL: ${{ secrets.HOST2_RENEW_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PROXY: http://127.0.0.1:10808
         run: |
           mkdir -p screenshots
