@@ -1,9 +1,9 @@
-name: Auto Renew Host2 Server Script
+name: Auto Renew host2 Server Script (sing-box HY2)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */6 * * *'  # 每 6 小时运行一次
 
 permissions:
   contents: read
@@ -20,7 +20,7 @@ jobs:
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/host2play-auto
+          repository: ${{ github.repository_owner }}/auto-renew-script
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
@@ -47,30 +47,63 @@ jobs:
           sudo apt-get install -y google-chrome-stable
 
       # =========================
-      # 🚀 安装并运行 Xray
+      # 📡 安装 Sing-box
       # =========================
-      - name: Install and Run Xray
+      - name: Install Sing-box
         working-directory: scripts
-        env:
-          V2RAY_CONFIG: ${{ secrets.V2RAY_CONFIG }}
         run: |
-          echo "⬇️ Downloading Xray-core..."
-          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
-          unzip -q Xray-linux-64.zip -d xray_bin
+          curl -L -o sing-box \
+            https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-linux-amd64
+          chmod +x sing-box
+          sudo mv sing-box /usr/local/bin/
+          sing-box version
 
-          echo "📝 Writing config..."
-          echo "$V2RAY_CONFIG" > xray_bin/config.json
+      # =========================
+      # 📄 写入 Sing-box 配置
+      # =========================
+      - name: Write Sing-box HY2 config
+        working-directory: scripts
+        run: |
+          cat > singbox_config.json <<EOF
+{
+  "log": {
+    "level": "warning"
+  },
+  "inbounds": [
+    {
+      "type": "http",
+      "tag": "local-in",
+      "listen": "127.0.0.1",
+      "listen_port": 10808
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "hysteria2",
+      "tag": "hy2-out",
+      "server": "38.58.180.137",
+      "server_port": 3003,
+      "password": "0a6568ff-ea3c-4271-9020-450560e10d63",
+      "tls": true,
+      "sni": "example.com"
+    }
+  ]
+}
+EOF
 
-          echo "🚀 Starting Xray..."
-          cd xray_bin
-          nohup ./xray run -c config.json > xray.log 2>&1 &
-          cd ..
-
-          echo "⏳ Waiting for Xray..."
+      # =========================
+      # 🚀 启动 Sing-box
+      # =========================
+      - name: Run Sing-box
+        working-directory: scripts
+        run: |
+          nohup sing-box run -c singbox_config.json > singbox.log 2>&1 &
+          echo "⏳ Waiting for Sing-box..."
           sleep 5
-
-          echo "🌐 Proxy test..."
+          echo "🌐 Proxy test:"
           curl -x http://127.0.0.1:10808 -I https://www.google.com/generate_204 || true
+          echo "📄 Sing-box log:"
+          cat singbox.log
 
       # =========================
       # 📦 Python依赖
@@ -93,7 +126,7 @@ jobs:
           PROXY: http://127.0.0.1:10808
         run: |
           mkdir -p screenshots
-          python main.py
+          xvfb-run -a python main.py
 
       # =========================
       # 📤 上传调试文件
