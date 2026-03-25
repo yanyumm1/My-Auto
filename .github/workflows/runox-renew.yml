@@ -3,7 +3,7 @@ name: Runox Auto Start
 on:
   # 每 3 小时触发一次
   schedule:
-    - cron: "0 */2 * * *"  # UTC 时间
+    - cron: "0 * * * *"  # UTC 时间
   workflow_dispatch:
 
 permissions:
