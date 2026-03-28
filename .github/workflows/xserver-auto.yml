@@ -1,81 +1,248 @@
-name: 🪄 XServer 自动签到（私库版）
+name: 🔄 XServer Auto Renew
 
 on:
-  schedule:
-    # UTC 00:15 & 12:15
-    # 对应北京时间 08:15 & 20:15
-    - cron: "15 */12 * * *"
+  # 手动触发
   workflow_dispatch:
+  
+  # 定时触发
+  schedule:
+    - cron: "01 6 * * *"
+    - cron: "53 18 * * *"
 
+# 权限配置：允许提交和推送更改
 permissions:
-  contents: write   # ⚠️ 必须加，否则 push 会被拒绝
+  contents: write
+concurrency:
+  group: xserver-renew
+  cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
+    env:
+      PROJECT_DIR: xserver
+      SCRIPT_NAME: renew.py
+      SCRIPT_DESC: XServer 续期脚本
+    
     steps:
-      # ✅ 检出私库 xserver
-      - name: Checkout private repo (xserver)
+      # 步骤 1: 检出公开仓库
+      - name: 📥 检出公开仓库
+        uses: actions/checkout@v4
+      
+      # 步骤 1.5: 创建输出目录
+      - name: 📁 创建输出目录
+        run: mkdir -p ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+        working-directory: .
+      
+      # 步骤 2: 检出私有仓库
+      - name: 🔐 检出私有仓库
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/xserver
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
-          path: scripts
+          ref: main
+          path: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+          fetch-depth: 1
 
-      - name: Setup Python
+      # 步骤 3: 设置 Python 环境
+      - name: 🐍 设置 Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: "**/requirements.txt"
 
-      # ⏱️ pip + playwright 缓存
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-pip-${{ hashFiles('scripts/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
-        working-directory: scripts
+      # 步骤 4: 安装系统依赖
+      - name: 📦 安装系统依赖
         run: |
-          pip install -r requirements.txt -q
-          python -m playwright install chromium
+          sudo apt-get update
+          sudo apt-get install -y xvfb fonts-noto-cjk
 
-      # 🎲 防止定时任务撞点
-      - name: Random delay (0-119s)
+      # 步骤 5: 安装 Python 依赖
+      - name: 📚 安装 Python 依赖
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "⚠️ 未找到 requirements.txt，跳过依赖安装"
+          fi
+          # 安装 pysocks 用于 SOCKS5 代理支持
+          pip install pysocks
+        working-directory: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+
+      # 步骤 5.5: 安装 Playwright 浏览器
+      - name: 🌐 安装 Playwright 浏览器
+        run: |
+          python -m playwright install chromium
+        working-directory: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+
+      # 步骤 5.6: 安装 Hysteria2（如果需要代理）
+      - name: 📡 安装 Hysteria2
+        run: |
+          if [ -n "${{ secrets.HY2_PROXY_URL }}" ]; then
+            echo "安装 Hysteria2..."
+            curl -L -o hysteria \
+              https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
+            chmod +x hysteria
+            sudo mv hysteria /usr/local/bin/hysteria
+            hysteria version
+            echo "✅ Hysteria2 安装完成"
+          else
+            echo "⚠️ 未配置代理，跳过 Hysteria2 安装"
+          fi
+
+      # 步骤 6: 添加随机延迟
+      - name: ⏳ 添加随机延迟
         run: |
           delay=$((RANDOM % 120))
-          echo "Random delay: ${delay}s"
+          echo "随机延迟: ${delay}秒"
           sleep $delay
 
-      # ▶️ 执行续期脚本
-      - name: Run renew script
-        working-directory: scripts
+      # 步骤 7: 执行脚本
+      - name: 🚀 执行 ${{ env.SCRIPT_DESC }}
         env:
           XSERVER_EMAIL: ${{ secrets.XSERVER_EMAIL }}
           XSERVER_PASSWORD: ${{ secrets.XSERVER_PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
-          HEADLESS: "true"
-        run: python renew.py
+          HY2_PROXY_URL: ${{ secrets.HY2_PROXY_URL }}
+          SOCKS_PORT: ${{ secrets.SOCKS_PORT || '51080' }}
 
-      # 🚀 提交并推送到私库
-      - name: Commit & push changes
-        if: success()
-        working-directory: scripts
+          #以下2个不要动，不会请不要碰
+          OUTPUT_DIR: ./
+          SCREENSHOT_DIR: ./screenshots
+        run: xvfb-run -a python ${{ env.SCRIPT_NAME }}
+        working-directory: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+
+      # 步骤 7.5: 调试 - 检查文件位置
+      - name: 🔍 调试 - 检查文件位置
+        if: always()
         run: |
+          echo "📂 当前目录: $(pwd)"
+          echo "📂 列出根目录:"
+          ls -la
+          echo "📂 检查私库目录内容:"
+          OUTPUT_DIR="${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}"
+          ls -la "$OUTPUT_DIR" 2>/dev/null || echo "目录不存在"
+          echo "📂 查找所有 report-notify.md 文件:"
+          find . -name "report-notify.md" 2>/dev/null || echo "未找到"
+          echo "📂 查找所有 time.txt 文件:"
+          find . -name "time.txt" 2>/dev/null || echo "未找到"
+
+      # 步骤 8: 收集报告文件
+      - name: 📋 收集报告文件
+        if: always()
+        run: |
+          OUTPUT_DIR="${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}"
+          mkdir -p "$OUTPUT_DIR"
+          if [ -f "$OUTPUT_DIR/report-notify.md" ]; then
+            echo "✅ 报告文件已找到"
+          else
+            echo "⚠️ 未找到 report-notify.md，创建空文件"
+            echo "# XServer 续期报告" > "$OUTPUT_DIR/report-notify.md"
+            echo "" >> "$OUTPUT_DIR/report-notify.md"
+            echo "脚本未生成报告文件" >> "$OUTPUT_DIR/report-notify.md"
+          fi
+
+      # 步骤 9: 添加报告头部
+      - name: 📝 添加报告头部
+        if: always()
+        run: |
+          OUTPUT_DIR="${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}"
+          if [ -f "$OUTPUT_DIR/report-notify.md" ]; then
+            TIMESTAMP=$(date -u +'%Y-%m-%d %H:%M:%S')
+            {
+              printf "Runner repo: %s | Run ID: %s | UTC: %s\n\n" \
+                "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$TIMESTAMP"
+              cat "$OUTPUT_DIR/report-notify.md"
+            } > "$OUTPUT_DIR/temp" && mv "$OUTPUT_DIR/temp" "$OUTPUT_DIR/report-notify.md"
+            echo "✅ 报告头部已添加"
+          else
+            echo "⚠️ 报告文件不存在，跳过添加头部"
+          fi
+
+      # 步骤 10: 更新时间文件
+      - name: ⏱️ 更新时间文件
+        if: always()
+        run: |
+          OUTPUT_DIR="${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}"
+          mkdir -p "$OUTPUT_DIR"
+          TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S')
+          echo "$TIMESTAMP" > "$OUTPUT_DIR/time.txt"
+          echo "✅ 时间文件已更新: $OUTPUT_DIR/time.txt"
+
+      # 步骤 11: 提交和推送更改
+      - name: 💾 提交和推送更改
+        if: always()
+        run: |
+          set -e
+          OUTPUT_DIR="${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}"
+          echo "📂 OUTPUT_DIR: $OUTPUT_DIR"
+          echo "📂 当前目录: $(pwd)"
+          echo "📂 检查 OUTPUT_DIR 内容:"
+          ls -la "$OUTPUT_DIR" 2>/dev/null || echo "⚠️ OUTPUT_DIR 不存在"
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 创建 xserver 目录
+          mkdir -p xserver
+          echo "✅ xserver 目录已创建"
+          
+          # 从私库目录复制文件到公开库的 xserver 目录
+          if [ -f "$OUTPUT_DIR/report-notify.md" ]; then
+            cp "$OUTPUT_DIR/report-notify.md" "xserver/report-notify.md"
+            echo "✅ 报告文件已复制到 xserver 目录"
+          else
+            echo "⚠️ 报告文件不存在，创建空文件"
+            echo "# XServer 续期报告" > "xserver/report-notify.md"
+            echo "脚本未生成报告文件" >> "xserver/report-notify.md"
+          fi
+          
+          if [ -f "$OUTPUT_DIR/time.txt" ]; then
+            cp "$OUTPUT_DIR/time.txt" "xserver/time.txt"
+            echo "✅ 时间文件已复制到 xserver 目录"
+          else
+            echo "⚠️ 时间文件不存在，创建新文件"
+            date +'%Y-%m-%d %H:%M:%S' > "xserver/time.txt"
+          fi
+          
+          echo "📂 xserver 目录内容:"
+          ls -la xserver/
+          
+          # 添加文件到 git
+          git add "xserver/report-notify.md" "xserver/time.txt" 2>/dev/null || true
+          
+          if git diff --cached --quiet; then
+            echo "无变化，无需提交"
+          else
+            TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S')
+            git commit -m "⏱️ 更新 xserver 文件: $TIMESTAMP"
+            git fetch origin main
+            git push -f origin HEAD:main
+            echo "✅ 更改已推送"
+          fi
 
-          git add README.md time.txt
+      # 步骤 12: 上传截图到 artifacts，7天内可下载压缩包，你可以自己改这个数字7
+      - name: 📸 上传截图到 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}/screenshots
+          retention-days: 7
+          if-no-files-found: warn
 
-          git commit -m "chore: auto check-in update [skip ci]" \
-            && git push || echo "Nothing to push"
-
-      
+      # 步骤 13: 清理原始截图文件
+      - name: 🧹 清理原始截图文件
+        if: always()
+        run: |
+          OUTPUT_DIR="${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}"
+          if [ -d "$OUTPUT_DIR/screenshots" ]; then
+            echo "🧹 清理截图文件..."
+            rm -f "$OUTPUT_DIR/screenshots"/*.png
+            echo "✅ 截图文件已清理"
+          else
+            echo "⚠️ 截图目录不存在，无需清理"
+          fi
