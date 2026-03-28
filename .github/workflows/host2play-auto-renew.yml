@@ -88,7 +88,7 @@ jobs:
       - name: Run renew script
         working-directory: scripts
         env:
-          HY2_URL: ${{ secrets.HY2_URL }}
+          HY2_URL: ${{ secrets.HY2_URL-quchu }}
           RENEW_URL: ${{ secrets.RENEW_URL }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
