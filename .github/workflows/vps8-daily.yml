@@ -1,0 +1,107 @@
+name: VPS8 Daily (HY2)
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: '0 17 * * *'  # 每天 UTC 17 点（北京时间 1 点）
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      # =========================
+      # 📥 拉主仓库
+      # =========================
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      # =========================
+      # 🔐 拉私有仓库（脚本）
+      # =========================
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/vps8-daily
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # =========================
+      # ⏳ 随机延迟（防风控）
+      # =========================
+      - name: Random delay
+        run: |
+          delay=$((RANDOM % 120))
+          echo "⏳ 随机延迟: ${delay}s"
+          sleep $delay
+
+      # =========================
+      # 🟢 Node.js
+      # =========================
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # =========================
+      # 🐍 Python（语音识别）
+      # =========================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      # =========================
+      # 📦 安装依赖
+      # =========================
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install playwright axios
+
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            ffmpeg \
+            curl \
+            pulseaudio \
+            fonts-liberation \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libgtk-3-0 \
+            libxss1 \
+            libasound2t64
+
+          pip install SpeechRecognition pydub
+
+      # =========================
+      # 🌐 安装 Chromium
+      # =========================
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      # =========================
+      # 🚀 安装 Hysteria2
+      # =========================
+      - name: Install Hysteria2
+        run: |
+          curl -L -o hysteria \
+            https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
+          chmod +x hysteria
+          sudo mv hysteria /usr/local/bin/
+          hysteria version
+
+      # =========================
+      # ▶️ 运行脚本（用私库里的）
+      # =========================
+      - name: Run Script
+        env:
+          VPS8_BATCH: ${{ secrets.VPS8_BATCH }}
+          VPS8_HY2_URL: ${{ secrets.VPS8_HY2_URL }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          mkdir -p scripts/screenshots
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" node scripts/main.js
