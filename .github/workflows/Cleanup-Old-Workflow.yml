@@ -2,7 +2,7 @@ name: Cleanup Old Workflow Runs
 
 on:
   schedule:
-    - cron: '0 3 * * 5' # 每周一 UTC 03:00（北京时间 11:00）
+    - cron: '0 3 * * 5' # 每周五 UTC 03:00（北京时间 11:00）
   workflow_dispatch:
 
 permissions:
@@ -57,32 +57,13 @@ jobs:
             done
           fi
 
-          # 生成新日志块（北京时间）
+          # 生成日志（北京时间）
           LOG="### Cleanup Log ($(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S'))\n$LOG_BODY"
 
           README="repo/README.md"
-          if [ -f "$README" ]; then
-            CONTENT=$(cat "$README")
-          else
-            CONTENT=""
-          fi
 
-          # 将新日志追加到顶部
-          echo -e "$LOG\n$CONTENT" > tmp_readme.md
-
-          # 保留最多 50 条 Cleanup Log
-          awk '
-            BEGIN {count=0; max=50; RS="### Cleanup Log"; ORS=""}
-            NR==1 {head=$0; next}
-            {blocks[NR]=$0; count++}
-            END {
-              print head
-              start = (count>max)?(count-max+1):1
-              for(i=start;i<=count;i++) print "### Cleanup Log" blocks[i]
-            }
-          ' tmp_readme.md > "$README"
-
-          rm tmp_readme.md
+          # ✅ 覆盖 README（只保留本次日志）
+          echo -e "$LOG" > "$README"
 
       # 4️⃣ 提交 README.md
       - name: Commit README update
