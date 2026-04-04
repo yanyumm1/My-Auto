@@ -11,11 +11,11 @@ permissions:
 jobs:
   checkin_job:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
-      # 📥 拉代码
-      - name: Checkout private repo (ikuuu-auto)
+      # 📥 拉私有仓库
+      - name: Checkout private repo
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/ikuuu-auto
@@ -28,30 +28,32 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 🌐 安装 Chrome（关键）
-      - name: Install Chrome
+      # 🌐 Chrome + 依赖
+      - name: Install Chrome & deps
         run: |
           sudo apt update
-          sudo apt install -y google-chrome-stable
+          sudo apt install -y google-chrome-stable xvfb
 
-      # 📦 安装依赖
+      # 📦 安装 Python 依赖
       - name: Install dependencies
         working-directory: scripts
         run: |
           pip install --upgrade pip
           pip install seleniumbase requests beautifulsoup4 cloudscraper
 
-      # 🚀 运行
-      - name: Run Ikuuu Checkin Script
+      # 🚀 运行脚本
+      - name: Run script
         working-directory: scripts
         env:
           IKUUU_EMAIL: ${{ secrets.IKUUU_EMAIL }}
           IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}
         run: |
-          python ikuuu.py
-      # 上传截图，方便调试
+          xvfb-run -a python ikuuu.py
+
+      # 📸 上传截图（修复点）
       - name: Upload screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ikuuu-screenshots
-          path: "*.png"
+          path: scripts/*.png
