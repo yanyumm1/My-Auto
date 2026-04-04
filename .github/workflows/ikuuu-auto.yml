@@ -49,3 +49,9 @@ jobs:
           IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}
         run: |
           python ikuuu.py
+      # 上传截图，方便调试
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v3
+        with:
+          name: ikuuu-screenshots
+          path: "*.png"
