@@ -49,11 +49,3 @@ jobs:
           IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}
         run: |
           xvfb-run -a python ikuuu.py
-
-      # 📸 上传截图（修复点）
-      - name: Upload screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ikuuu-screenshots
-          path: scripts/*.png
