@@ -2,11 +2,8 @@ name: Ikuuu Auto Checkin
 
 on:
   workflow_dispatch:
-
-  
   schedule:
     - cron: '16 16 * * *'
-    
 
 permissions:
   contents: write
@@ -14,10 +11,10 @@ permissions:
 jobs:
   checkin_job:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
-      # ✅ 拉取私库 ikuuu-auto
+      # 📥 拉代码
       - name: Checkout private repo (ikuuu-auto)
         uses: actions/checkout@v4
         with:
@@ -25,24 +22,30 @@ jobs:
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      # 🐍 安装 Python
+      # 🐍 Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      # 🌐 安装 Chrome（关键）
+      - name: Install Chrome
+        run: |
+          sudo apt update
+          sudo apt install -y google-chrome-stable
+
       # 📦 安装依赖
       - name: Install dependencies
         working-directory: scripts
         run: |
-          pip install requests beautifulsoup4 cloudscraper
+          pip install --upgrade pip
+          pip install seleniumbase requests beautifulsoup4 cloudscraper
 
-      # 🚀 运行脚本
+      # 🚀 运行
       - name: Run Ikuuu Checkin Script
         working-directory: scripts
         env:
           IKUUU_EMAIL: ${{ secrets.IKUUU_EMAIL }}
           IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}
-        run: python ikuuu.py
-
-      
+        run: |
+          python ikuuu.py
