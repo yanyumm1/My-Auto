@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 🌐 Chrome + 依赖
+      # 🌐 Chrome + xvfb
       - name: Install Chrome & deps
         run: |
           sudo apt update
@@ -47,5 +47,7 @@ jobs:
         env:
           IKUUU_EMAIL: ${{ secrets.IKUUU_EMAIL }}
           IKUUU_PASSWORD: ${{ secrets.IKUUU_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           xvfb-run -a python ikuuu.py
