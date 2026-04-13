@@ -3,7 +3,7 @@ name: JustRunMy-AutoReset
 on:
   schedule:
     # UTC 19:12（北京时间 03:12）
-    - cron: "12 19 */2 * *"
+    - cron: "12 19 * * *"
   workflow_dispatch:
 
 permissions:
