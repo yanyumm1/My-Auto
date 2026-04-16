@@ -3,7 +3,7 @@ name: My-HidenCloud-AutoRenew
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 11 * * *'
 
 permissions:
   contents: write
@@ -30,21 +30,9 @@ jobs:
       - name: 安装系统依赖
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            libgbm1 libasound2t64 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
-            libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
-            libxrandr2 libpango-1.0-0 libcairo2 xvfb curl > /dev/null
+          sudo apt-get install -y -qq libgbm1 libasound2t64 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 xvfb > /dev/null
       
-      # ✅ 安装 Hy2
-      - name: Install Hysteria2
-        run: |
-          curl -L -o hysteria \
-            https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
-          chmod +x hysteria
-          sudo mv hysteria /usr/local/bin/hysteria
-          hysteria version
-
-      - name: 安装 Python 依赖
+      - name: 安装 Python 依赖并预下载浏览器
         run: |
           pip install -r requirements.txt -q
                     
@@ -52,19 +40,15 @@ jobs:
         env:
           HIDEN_EMAIL: ${{ secrets.HIDEN_EMAIL }}
           HIDEN_PWD: ${{ secrets.HIDEN_PWD }}
-          HIDEN_SERVER_ID: ${{ secrets.HIDEN_SERVER_ID }}
+          SERVER_ID: ${{ secrets.SERVER_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-          # ✅ 新增 Hy2 URL
-          HIDEN_HY2_URL: ${{ secrets.HIDEN_HY2_URL }}
-
           DISPLAY: :99
         run: |
           Xvfb :99 -screen 0 1920x1080x24 &
           python main.py
 
-      - name: 提交变更
+      - name: 提交变更 (README & JSON)
         if: always()
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -78,7 +62,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hiden-cloud-results
-          path: "*.png"
+          path: |
+            *.png
           retention-days: 3
 
       - name: 清理运行历史
