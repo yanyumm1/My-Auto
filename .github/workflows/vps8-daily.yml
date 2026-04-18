@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
   schedule:
-    - cron: '0 11 * * *'  # 每天 UTC 17 点（北京时间 1 点）
+    - cron: '0 11 * * *'  # UTC 11点
 
 jobs:
   run:
@@ -13,13 +13,13 @@ jobs:
 
     steps:
       # =========================
-      # 📥 拉主仓库
+      # 📥 主仓库
       # =========================
       - name: Checkout main repo
         uses: actions/checkout@v4
 
       # =========================
-      # 🔐 拉私有仓库（脚本）
+      # 🔐 私有仓库
       # =========================
       - name: Checkout private repo
         uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
           path: scripts
 
       # =========================
-      # ⏳ 随机延迟（防风控）
+      # ⏳ 随机延迟
       # =========================
       - name: Random delay
         run: |
@@ -38,7 +38,7 @@ jobs:
           sleep $delay
 
       # =========================
-      # 🟢 Node.js
+      # 🟢 Node
       # =========================
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -46,7 +46,7 @@ jobs:
           node-version: 20
 
       # =========================
-      # 🐍 Python（语音识别）
+      # 🐍 Python
       # =========================
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -54,7 +54,7 @@ jobs:
           python-version: 3.11
 
       # =========================
-      # 📦 安装依赖
+      # 📦 依赖
       # =========================
       - name: Install dependencies
         run: |
@@ -77,13 +77,13 @@ jobs:
           pip install SpeechRecognition pydub
 
       # =========================
-      # 🌐 安装 Chromium
+      # 🌐 浏览器
       # =========================
       - name: Install Chromium
         run: npx playwright install chromium
 
       # =========================
-      # 🚀 安装 Hysteria2
+      # 🚀 HY2
       # =========================
       - name: Install Hysteria2
         run: |
@@ -94,7 +94,7 @@ jobs:
           hysteria version
 
       # =========================
-      # ▶️ 运行脚本（用私库里的）
+      # ▶️ 执行
       # =========================
       - name: Run Script
         env:
@@ -105,3 +105,25 @@ jobs:
         run: |
           mkdir -p scripts/screenshots
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" node scripts/main.js
+
+      # =========================
+      # 📤 上传截图（关键）
+      # =========================
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vps8-screenshots
+          path: scripts/screenshots
+          retention-days: 3
+
+      # =========================
+      # 📤 上传 HTML（更关键）
+      # =========================
+      - name: Upload HTML dumps
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vps8-html
+          path: scripts/screenshots/*.html
+          retention-days: 3
