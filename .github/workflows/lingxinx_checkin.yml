@@ -52,8 +52,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: python lingxinx_checkin.py
 
-      # 👇 上传截图（关键）
+      # 👇 上传截图（保留但禁用）
       - name: Upload screenshots
+        if: false
         uses: actions/upload-artifact@v4
         with:
           name: lingxinx-shots
