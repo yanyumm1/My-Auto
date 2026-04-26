@@ -5,16 +5,11 @@ on:
     - cron: '10 19 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
 
     steps:
-      # 📥 私库
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
@@ -22,48 +17,44 @@ jobs:
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           path: scripts
 
-      # 🐍 Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # 📦 系统依赖 + 中文字体
-      - name: Install system dependencies
-        working-directory: scripts
+      - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             xvfb \
             fonts-noto-cjk \
-            fonts-dejavu-core \
             fonts-wqy-zenhei \
             fonts-wqy-microhei \
-            python3-tk \
-            python3-dev \
             curl
 
-      # 📡 Hy2
-      - name: Install Hysteria2
+      - name: Install hysteria
         run: |
           curl -L -o hysteria \
-            https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
+          https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
           chmod +x hysteria
           sudo mv hysteria /usr/local/bin/hysteria
 
-      # 📦 Python
-      - name: Install Python deps
-        working-directory: scripts
+      - name: Install pip
         run: |
           pip install seleniumbase pyvirtualdisplay requests
 
-      # 🚀 执行
-      - name: Run script
+      - name: Run
         working-directory: scripts
         env:
           LINGXIN_BATCH: ${{ secrets.LINGXIN_BATCH }}
           LINGXIN_HY2_URL: ${{ secrets.LINGXIN_HY2_URL }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        run: |
-          python lingxinx_checkin.py
+        run: python lingxinx_checkin.py
+
+      # 👇 上传截图（关键）
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: lingxinx-shots
+          path: /tmp/*.png
