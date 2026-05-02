@@ -37,13 +37,6 @@ jobs:
           echo "⏳ 随机延迟: ${delay}s"
           sleep $delay
 
-      # =========================
-      # 🟢 Node
-      # =========================
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
       # =========================
       # 🐍 Python
@@ -85,7 +78,10 @@ jobs:
       # 🌐 浏览器
       # =========================
       - name: Install Chromium
-        run: npx playwright install chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable seleniumbase
+      
 
       # =========================
       # 🚀 HY2
