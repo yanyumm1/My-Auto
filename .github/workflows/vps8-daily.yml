@@ -2,7 +2,6 @@ name: VPS8 Daily (HY2)
 
 on:
   workflow_dispatch:
-
   schedule:
     - cron: '0 11 * * *'
 
@@ -37,7 +36,6 @@ jobs:
           echo "⏳ 随机延迟: ${delay}s"
           sleep $delay
 
-
       # =========================
       # 🐍 Python
       # =========================
@@ -47,13 +45,10 @@ jobs:
           python-version: 3.11
 
       # =========================
-      # 📦 安装依赖（🔥已加中文字体）
+      # 📦 安装系统依赖
       # =========================
-      - name: Install dependencies
+      - name: Install system deps
         run: |
-          npm init -y
-          npm install playwright axios
-
           sudo apt-get update
           sudo apt-get install -y \
             xvfb \
@@ -67,21 +62,36 @@ jobs:
             libatk-bridge2.0-0 \
             libgtk-3-0 \
             libxss1 \
-            libasound2t64
+            libasound2t64 \
+            libgbm1 \
+            libxshmfence1 \
+            libxrandr2 \
+            libxdamage1 \
+            libxfixes3 \
+            libxcomposite1 \
+            libxcursor1 \
+            libxi6 \
+            libxtst6 \
+            libappindicator3-1 \
+            libdbus-1-3
 
-          # 刷新字体缓存（关键）
           fc-cache -fv
 
-          pip install SpeechRecognition pydub
+      # =========================
+      # 🌐 安装 Chrome
+      # =========================
+      - name: Install Chrome
+        run: |
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt install -y ./google-chrome-stable_current_amd64.deb
 
       # =========================
-      # 🌐 浏览器
+      # 🐍 Python 依赖（关键修复）
       # =========================
-      - name: Install Chromium
+      - name: Install Python deps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable seleniumbase
-      
+          pip install --upgrade pip
+          pip install seleniumbase requests
 
       # =========================
       # 🚀 HY2
@@ -105,4 +115,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           mkdir -p scripts/screenshots
-          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python3 scripts/main.py
+
+          xvfb-run -a \
+            --server-args="-screen 0 1920x1080x24" \
+            python3 scripts/main.py
