@@ -1,9 +1,9 @@
-name: My-HidenCloud-AutoRenew
+name: My-HidenCloud-AutoRenew2
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '1 16 * * *'
+    - cron: '10 16 * * *'
 
 permissions:
   contents: write
