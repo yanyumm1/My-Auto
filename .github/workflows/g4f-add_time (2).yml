@@ -1,0 +1,58 @@
+name: G4F Server Auto Addtime v2
+ 
+on:
+  schedule:
+    - cron: '23 17 */2 * *'
+  workflow_dispatch:
+
+jobs:
+  run-addtime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 下载私库脚本
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/g4f-addtime-private
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+
+      - name: 📂 移动脚本到工作目录
+        run: mv private/main.py main.py
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 安装 Python 依赖及系统组件
+        run: |
+          # 1. 升级基础构建工具，防止由于 GHA 镜像太旧导致编译失败
+          python -m pip install --upgrade pip setuptools wheel
+          
+          # 2. 显式安装 DrissionPage 及其所有可能漏掉的底层核心依赖
+          pip install DrissionPage requests DataRecorder DownloadKit FlowViewer lxml websocket-client psutil
+          
+          # 3. 安装虚拟显示器
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: 安装并配置 Cloudflare WARP CLI
+        run: |
+          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+          sudo apt-get update
+          sudo apt-get install -y cloudflare-warp
+          
+          warp-cli --accept-tos registration new
+          warp-cli --accept-tos mode warp
+          warp-cli --accept-tos connect
+          
+          sleep 5
+          echo " WARP 初始化完成"
+
+      - name: 运行续期脚本
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          xvfb-run -a python main2.py
