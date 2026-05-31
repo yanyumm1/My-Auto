@@ -1,0 +1,89 @@
+name: Quartex Auto Renew
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: '0 */12 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  quartex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # =========================
+      # 📥 检出私库 quartex_renew
+      # =========================
+      - name: Checkout private repo (quartex_renew)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/quartex_renew
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # =========================
+      # 🐍 Python
+      # =========================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # =========================
+      # 📦 Linux deps
+      # =========================
+      - name: Install system dependencies
+        working-directory: scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            fonts-noto-cjk \
+            fonts-dejavu-core \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libx11-xcb1 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxrandr2 \
+            libgbm1 \
+            libgtk-3-0 \
+            libasound2t64 \
+            libxshmfence1
+
+      # =========================
+      # 📦 Python deps
+      # =========================
+      - name: Install Python packages
+        working-directory: scripts
+        run: |
+          python -m pip install --upgrade pip
+
+          pip install -q \
+            playwright \
+            requests
+
+      # =========================
+      # 🌐 Install Chromium
+      # =========================
+      - name: Install Playwright Browsers
+        working-directory: scripts
+        run: |
+          python -m playwright install --with-deps chromium
+
+      # =========================
+      # 🚀 Run Quartex
+      # =========================
+      - name: Run Script
+        working-directory: scripts
+        env:
+          QUARTEX_BATCH: ${{ secrets.QUARTEX_BATCH }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+        run: |
+          python quartex.py
