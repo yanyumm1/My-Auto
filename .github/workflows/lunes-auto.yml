@@ -48,3 +48,14 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python login.py
+
+      # 📦 上传调试文件（即使失败也上传）
+      - name: Upload debug files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lunes-debug
+          path: |
+            scripts/*.html
+            scripts/screenshots/**
+          if-no-files-found: ignore
