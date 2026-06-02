@@ -1,0 +1,58 @@
+name: Monkey Network Daily
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monkey:
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    steps:
+      # =========================
+      # 📥 检出私库 monkey-auto
+      # =========================
+      - name: Checkout private repo (monkey-auto)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/monkey-auto
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # =========================
+      # 🐍 Python
+      # =========================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # =========================
+      # 📦 Python 依赖
+      # =========================
+      - name: Install Dependencies
+        working-directory: scripts
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # =========================
+      # 🚀 执行 Monkey 脚本
+      # =========================
+      - name: Run Monkey Network
+        working-directory: scripts
+        env:
+          monkey_email: ${{ secrets.MONKEY_EMAIL }}
+          monkey_password: ${{ secrets.MONKEY_PASSWORD }}
+
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          python monkey.py
