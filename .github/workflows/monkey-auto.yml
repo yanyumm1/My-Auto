@@ -1,9 +1,11 @@
-name: Monkey Network Daily
+name: Monkey Auto
 
 on:
+  # 每天 UTC 18:00 自动运行
   schedule:
-    - cron: '0 18 * * *'
+    - cron: '10 18 * * *'
 
+  # 手动运行
   workflow_dispatch:
 
 permissions:
@@ -12,7 +14,6 @@ permissions:
 jobs:
   monkey:
     runs-on: ubuntu-latest
-
     timeout-minutes: 15
 
     steps:
@@ -35,18 +36,20 @@ jobs:
           python-version: "3.12"
 
       # =========================
-      # 📦 Python 依赖
+      # 📦 安装依赖
       # =========================
-      - name: Install Dependencies
+      - name: Install deps
         working-directory: scripts
         run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       # =========================
-      # 🚀 执行 Monkey 脚本
+      # 🚀 执行脚本
       # =========================
-      - name: Run Monkey Network
+      - name: Run Monkey
         working-directory: scripts
         env:
           monkey_email: ${{ secrets.MONKEY_EMAIL }}
