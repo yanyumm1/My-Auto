@@ -54,6 +54,7 @@ jobs:
         env:
           monkey_email: ${{ secrets.MONKEY_EMAIL }}
           monkey_password: ${{ secrets.MONKEY_PASSWORD }}
+          MONKEY_API_KEY: ${{ secrets.MONKEY_API_KEY }}
 
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
