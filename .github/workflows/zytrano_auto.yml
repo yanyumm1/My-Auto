@@ -3,7 +3,7 @@ name: Zytrano Auto Renew
 on:
   schedule:
     # 每周六 UTC 19:10（北京时间周日 03:10）
-    - cron: '10 19 * * 6'
+    - cron: '10 19 */3 * *'
 
   workflow_dispatch:
 
@@ -13,7 +13,7 @@ permissions:
 jobs:
   renew:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 15
 
     steps:
       # =========================
