@@ -1,4 +1,4 @@
-name: Mephia 续期
+name: packetlabs 续期
 on:
   workflow_dispatch:
   schedule:
