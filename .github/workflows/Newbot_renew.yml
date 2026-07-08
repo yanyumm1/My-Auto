@@ -1,4 +1,4 @@
-name: Bot Hosting Renew
+name: NewBot Hosting Renew
 
 on:
   schedule:
