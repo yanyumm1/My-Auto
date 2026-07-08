@@ -39,40 +39,41 @@ jobs:
           echo "${{ github.repository }}"
 
       # 4️⃣ 删除旧 Workflow Runs（保留最新一次）
-      - name: Cleanup old workflow runs
+           - name: Delete all workflow runs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Listing workflow runs..."
+          echo "🗑️ Deleting all workflow runs..."
 
-          gh run list \
-            --workflow="${{ github.workflow }}" \
-            --limit 100
+          page=1
 
-          echo
+          while true; do
+            runs=$(gh api \
+              "repos/${{ github.repository }}/actions/runs?per_page=100&page=$page" \
+              --jq '.workflow_runs[] | select(.status != "in_progress") | .id')
 
-          runs=$(gh run list \
-            --workflow="${{ github.workflow }}" \
-            --limit 100 \
-            --json databaseId \
-            --jq '.[].databaseId')
-
-          echo "Run IDs:"
-          echo "$runs"
-
-          count=0
-
-          for run_id in $runs; do
-            count=$((count + 1))
-
-            if [ "$count" -eq 1 ]; then
-              echo "Keeping latest run: $run_id"
-              continue
+            if [ -z "$runs" ]; then
+              echo "No more workflow runs found."
+              break
             fi
 
-            echo "Deleting run: $run_id"
-            gh run delete "$run_id"
+            echo "Processing page $page..."
+
+            while read -r run_id; do
+              [ -z "$run_id" ] && continue
+
+              echo "Deleting run: $run_id"
+
+              gh api \
+                -X DELETE \
+                "repos/${{ github.repository }}/actions/runs/$run_id" \
+                || true
+            done <<< "$runs"
+
+            page=$((page + 1))
           done
+
+          echo "✅ Cleanup finished."
 
       # 5️⃣ 清理 Artifacts 并生成日志
       - name: Clean artifacts + generate log
