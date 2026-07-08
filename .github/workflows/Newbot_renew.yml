@@ -1,0 +1,255 @@
+name: Bot Hosting Renew
+
+on:
+  schedule:
+    - cron: "19 16 * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+
+jobs:
+  run-bot:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # =========================
+      # 📥 下载私库脚本
+      # =========================
+      - name: 📥 下载私库脚本
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/bot-hosting-auto-renew
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: private
+
+
+      - name: 📂 移动脚本到工作目录
+        run: |
+          cp -a private/. .
+
+
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            xvfb \
+            wget \
+            curl \
+            unzip \
+            xdotool \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libgtk-3-0 \
+            libxss1 \
+            libasound2t64 \
+            ca-certificates \
+            fonts-liberation \
+            fonts-noto-color-emoji
+
+          sudo apt-get install -y chromium || sudo apt-get install -y chromium-browser
+
+
+      - name: Install Python dependencies
+        run: |
+
+          python -m pip install --upgrade pip setuptools wheel
+
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+          pip install \
+            seleniumbase \
+            requests \
+            DrissionPage \
+            DataRecorder \
+            DownloadKit \
+            FlowViewer \
+            lxml \
+            websocket-client \
+            psutil
+
+
+
+      - name: Install Playwright
+        run: |
+
+          npm install playwright
+
+          npx playwright install chromium
+
+
+
+      - name: Start Xvfb
+        run: |
+
+          Xvfb :99 -screen 0 1920x1080x24 &
+
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+
+
+      # =========================
+      # 🛡️ 启动 GOST
+      # =========================
+      - name: 🛡️ 启动 GOST
+        if: ${{ env.BOT_GOST_PROXY != '' }}
+        env:
+          BOT_GOST_PROXY: ${{ secrets.BOT_GOST_PROXY }}
+
+        run: |
+
+          set -e
+
+          VERSION=$(curl -s https://api.github.com/repos/ginuerzh/gost/releases/latest \
+          | grep '"tag_name"' \
+          | cut -d'"' -f4 \
+          | tr -d 'v')
+
+
+          echo "📦 GOST VERSION: $VERSION"
+
+
+          wget -q "https://github.com/ginuerzh/gost/releases/download/v${VERSION}/gost_${VERSION}_linux_amd64.tar.gz"
+
+
+          tar -xzf "gost_${VERSION}_linux_amd64.tar.gz"
+
+
+          chmod +x gost
+
+
+          echo "🚀 启动 GOST..."
+
+
+          nohup ./gost \
+            -L http://:8080 \
+            -F "$BOT_GOST_PROXY" \
+            > gost.log 2>&1 &
+
+
+          sleep 3
+
+
+          echo "✅ 测试代理"
+
+
+          MASKED_IP=$(curl -s \
+            -x http://127.0.0.1:8080 \
+            https://api.ipify.org \
+            | sed 's/\([0-9]*\.[0-9]*\)\..*/\1.**.**/g')
+
+
+          echo "IP: $MASKED_IP"
+
+
+
+      - name: Discord OAuth Login
+
+        env:
+          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
+
+          BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
+
+          BOT_GOST_PROXY: http://127.0.0.1:8080
+
+        run: |
+
+          node playwright_login.js
+
+
+
+      - name: Run Renew Bot
+
+        env:
+
+          BOT_GOST_PROXY: http://127.0.0.1:8080
+
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+
+        run: |
+
+          xvfb-run -a python selenium_run.py
+
+
+
+      - name: Cleanup old workflow runs
+
+        if: always()
+
+        env:
+
+          GH_TOKEN: ${{ github.token }}
+
+        run: |
+
+          runs=$(gh run list \
+            --workflow="${{ github.workflow }}" \
+            --limit 100 \
+            --json databaseId \
+            --jq '.[].databaseId')
+
+
+          count=0
+
+
+          for run_id in $runs; do
+
+            count=$((count + 1))
+
+
+            if [ "$count" -gt 1 ]; then
+
+              echo "Deleting run: $run_id"
+
+              gh run delete "$run_id" || true
+
+            fi
+
+          done
+
+
+
+      - name: Commit time.txt to repo
+
+        if: always()
+
+        run: |
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+
+          date '+%Y-%m-%d %H:%M:%S' > time.txt
+
+
+          git add time.txt
+
+
+          git commit -m "Update time.txt" || exit 0
+
+          git push
