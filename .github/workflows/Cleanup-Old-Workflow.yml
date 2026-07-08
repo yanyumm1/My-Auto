@@ -24,44 +24,73 @@ jobs:
           sudo apt update
           sudo apt install -y gh jq
 
-      # 3️⃣ 删除旧 Workflow Runs（仅保留最新一次）
-      - name: Cleanup old workflow runs
-        if: always()
+      # 3️⃣ 调试 GitHub CLI
+      - name: Debug GitHub CLI
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          echo "GitHub CLI Version:"
+          gh --version
+          echo
+          echo "Current workflow:"
+          echo "${{ github.workflow }}"
+          echo
+          echo "Repository:"
+          echo "${{ github.repository }}"
+
+      # 4️⃣ 删除旧 Workflow Runs（保留最新一次）
+      - name: Cleanup old workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Listing workflow runs..."
+
+          gh run list \
+            --workflow="${{ github.workflow }}" \
+            --limit 100
+
+          echo
+
           runs=$(gh run list \
             --workflow="${{ github.workflow }}" \
             --limit 100 \
             --json databaseId \
             --jq '.[].databaseId')
 
+          echo "Run IDs:"
+          echo "$runs"
+
           count=0
 
           for run_id in $runs; do
             count=$((count + 1))
 
-            if [ "$count" -gt 1 ]; then
-              echo "Deleting run: $run_id"
-              gh run delete "$run_id" || true
+            if [ "$count" -eq 1 ]; then
+              echo "Keeping latest run: $run_id"
+              continue
             fi
+
+            echo "Deleting run: $run_id"
+            gh run delete "$run_id"
           done
 
-      # 4️⃣ 清理 Artifacts 并生成日志
+      # 5️⃣ 清理 Artifacts 并生成日志
       - name: Clean artifacts + generate log
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          export GH_TOKEN=${{ github.token }}
+          echo "📦 Cleaning artifacts older than 7 days..."
 
-          echo "📦 Cleaning artifacts older than 1 days..."
-
-          cutoff=$(date -u -d "1 days ago" +%s)
+          cutoff=$(date -u -d "7 days ago" +%s)
 
           LOG_BODY=""
 
-          artifacts=$(gh api repos/${{ github.repository }}/actions/artifacts --paginate --jq '.artifacts[] | "\(.id) \(.created_at)"')
-
-          # 确保日志文件存在
           touch cleanup-log.txt
+
+          artifacts=$(gh api \
+            repos/${{ github.repository }}/actions/artifacts \
+            --paginate \
+            --jq '.artifacts[] | "\(.id) \(.created_at)"')
 
           if [ -z "$artifacts" ]; then
             LOG_BODY="• No artifacts found"
@@ -79,7 +108,7 @@ jobs:
 
           echo -e "$LOG_BODY" > cleanup-log.txt
 
-      # 5️⃣ 更新 README
+      # 6️⃣ 更新 README
       - name: Update README
         run: |
           TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
@@ -90,7 +119,7 @@ jobs:
             cat cleanup-log.txt
           } > README.md
 
-      # 6️⃣ 提交更改
+      # 7️⃣ 提交更改
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
@@ -98,9 +127,9 @@ jobs:
 
           git add README.md
 
-          if ! git diff --cached --quiet; then
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
             git commit -m "🧹 Cleanup workflow runs & artifacts log"
             git push
-          else
-            echo "No changes to commit."
           fi
