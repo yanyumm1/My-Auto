@@ -25,29 +25,44 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: 📦 安装 Python 依赖及系统组件
+      - name: 📦 安装依赖
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install DrissionPage requests DataRecorder DownloadKit FlowViewer lxml websocket-client psutil pyvirtualdisplay
 
           sudo apt-get update
-          sudo apt-get install -y xvfb chromium-browser
+          sudo apt-get install -y xvfb chromium-browser curl
 
-      - name: 🚀 启动 sing-box（如果设置 VLINK）
+      - name: 🚀 启动 sing-box（可选）
         env:
           VLINK: ${{ secrets.AIDA_LINK }}
         run: |
+          set +e
+
           if [ -n "$VLINK" ]; then
-            curl -LO https://amd64.ssss.nyc.mn/sb
-            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            echo "🟢 检测到 VLINK，启动 sing-box"
+
+            curl -L -o sb https://amd64.ssss.nyc.mn/sb
+            curl -L -o vlink_to_sb.py https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+
             chmod +x sb
+
             python vlink_to_sb.py "$VLINK" > v.json
-            nohup ./sb run -c v.json > /dev/null 2>&1 &
-            sleep 3
-          fi
-            echo "✅ 测试代理"
+            if [ $? -ne 0 ]; then
+              echo "❌ vlink 转换失败，跳过代理"
+              exit 0
+            fi
+
+            nohup ./sb run -c v.json > sb.log 2>&1 &
+            sleep 5
+
+            echo "🌐 测试代理..."
             curl -s -x http://127.0.0.1:1080 https://api.ipify.org \
-            | sed 's/\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*/\1**/g'
+            | sed 's/\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*/\1**/g' || echo "⚠️ 代理不可用"
+
+          else
+            echo "⚪ 未设置 VLINK，跳过代理"
+          fi
 
       - name: ▶️ 运行续期脚本
         env:
