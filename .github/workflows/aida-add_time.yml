@@ -46,7 +46,7 @@ jobs:
             sleep 3
           fi
             echo "✅ 测试代理"
-            curl -s -x http://127.0.0.1:8080 https://api.ipify.org \
+            curl -s -x http://127.0.0.1:1080 https://api.ipify.org \
             | sed 's/\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*/\1**/g'
 
       - name: ▶️ 运行续期脚本
@@ -55,5 +55,6 @@ jobs:
           AIDA_PASSWORD: ${{ secrets.AIDA_PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PROXY: socks5://127.0.0.1:1080
         run: |
           xvfb-run -a python aida_renew.py
