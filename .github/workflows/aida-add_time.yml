@@ -33,36 +33,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb chromium-browser curl
 
-      - name: 🚀 启动 sing-box（可选）
+      - name: ⚙ 设置代理 (sing-box)
         env:
-          VLINK: ${{ secrets.AIDA_LINK }}
+          NODE_LINK: ${{ secrets.AIDA_LINK }}
         run: |
-          set +e
+          bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
 
-          if [ -n "$VLINK" ]; then
-            echo "🟢 检测到 VLINK，启动 sing-box"
+          echo "✅ 测试代理"
 
-            curl -L -o sb https://amd64.ssss.nyc.mn/sb
-            curl -L -o vlink_to_sb.py https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
-
-            chmod +x sb
-
-            python vlink_to_sb.py "$VLINK" > v.json
-            if [ $? -ne 0 ]; then
-              echo "❌ vlink 转换失败，跳过代理"
-              exit 0
-            fi
-
-            nohup ./sb run -c v.json > sb.log 2>&1 &
-            sleep 5
-
-            echo "🌐 测试代理..."
-            curl -s -x http://127.0.0.1:1080 https://api.ipify.org \
-            | sed 's/\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*/\1**/g' || echo "⚠️ 代理不可用"
-
-          else
-            echo "⚪ 未设置 VLINK，跳过代理"
-          fi
+          curl -s -x http://127.0.0.1:1080 https://api.ipify.org \
+          | sed 's/\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*/\1**/g'
 
       - name: ▶️ 运行续期脚本
         env:
@@ -70,6 +50,7 @@ jobs:
           AIDA_PASSWORD: ${{ secrets.AIDA_PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PROXY: socks5://127.0.0.1:1080
+          PROXY_SERVER: socks5://127.0.0.1:1080
+          IS_PROXY: true
         run: |
           xvfb-run -a python aida_renew.py
