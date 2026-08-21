@@ -1,0 +1,238 @@
+name: 🔄 Hus Auto Renew
+
+on:
+  schedule:
+    - cron: '10 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: Hus_Renew
+      cancel-in-progress: false
+    env:
+      # ════════════════════════════════════════════════════════════════
+      # Secrets（在公开 repo → Settings → Secrets 中配置）
+      # ════════════════════════════════════════════════════════════════
+      # hus.co.id 账号，多个用分号分隔：
+      #   phone,tg_bot_token,tg_chat_id,tg_api_id,tg_api_hash,tg_session
+      #   TG 凭据（后三个字段）由每账号独立提供
+      HUS_BATCH: ${{ secrets.HUS_BATCH }}
+      # 代理
+      PROXY_CONTENT: ${{ secrets.HUS_HY2_PROXY_URL }}
+      SOCKS_PORT: ${{ secrets.SOCKS_PORT || '10808' }}
+      # 可选
+      SCREENSHOT_DIR: screenshots
+      DEBUG_FLAG: "0"
+      # 续期重试次数（外层）
+      MAX_RENEW_RETRIES: "0"
+      # IP 被封时切换 WARP 重试次数（内层）
+      #所以一共会重试3*5=15次
+      MAX_WARP_RETRIES: "20"
+      # 登录重试次数
+      MAX_LOGIN_RETRIES: "1"
+      # 私有仓库（含 hus-renew.py）
+      PRIVATE_REPO: yanyumm1/hus
+      PROJECT_DIR: hus
+
+    steps:
+      - name: 检出公开仓库
+        uses: actions/checkout@v4
+
+      - name: 创建输出目录
+        run: mkdir -p ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}/${{ env.SCREENSHOT_DIR }}
+
+      - name: 检出私有仓库
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRIVATE_REPO }}
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          ref: main
+          path: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+          fetch-depth: 1
+
+      - name: 校验 HUS_BATCH
+        env:
+          HUS_BATCH: ${{ secrets.HUS_BATCH }}
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          value = os.environ.get("HUS_BATCH", "").strip()
+          if not value:
+              raise SystemExit("HUS_BATCH 未设置或为空")
+          accounts = [x.strip() for x in value.replace("\\n", ";").split(";") if x.strip()]
+          if not accounts:
+              raise SystemExit("HUS_BATCH 没有有效账号")
+          for index, account in enumerate(accounts, 1):
+              fields = [x.strip() for x in account.split(",")]
+              if len(fields) < 6:
+                  raise SystemExit(f"HUS_BATCH 第 {index} 个账号字段不足：需要 phone,bot_token,chat_id,api_id,api_hash,session")
+              if any(not fields[i] for i in range(6)):
+                  raise SystemExit(f"HUS_BATCH 第 {index} 个账号存在空字段")
+          print(f"HUS_BATCH 预检通过：{len(accounts)} 个账号，凭据内容已隐藏")
+          PY
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}/requirements.txt
+
+      - name: 缓存 Chromium apt 包
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/hus-apt/*.deb
+          key: apt-chromium-${{ runner.os }}-${{ runner.arch }}-v1
+
+      - name: 安装依赖
+        working-directory: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+        run: |
+          mkdir -p "$HOME/.cache/hus-apt/partial"
+          sudo apt-get update
+          sudo apt-get -o Dir::Cache::archives="$HOME/.cache/hus-apt" \
+            install -y xvfb chromium ffmpeg unzip curl wget jq ca-certificates
+          pip install --upgrade pip
+          pip install -r requirements.txt -q
+          python3 -c 'import speech_recognition, pydub, audioop; print("语音依赖导入成功")'
+
+      - name: 启用 WARP
+        uses: fscarmen/warp-on-actions@v1.3
+        with:
+          stack: ipv4
+          mode: client
+
+      - name: 安装代理
+        working-directory: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+        run: |
+          if [ -z "$PROXY_CONTENT" ]; then
+            echo "[INFO] 未配置代理，直连模式"
+            exit 0
+          fi
+
+          SB_VER="1.13.14"
+          ARCHIVE="sing-box-${SB_VER}-linux-amd64.tar.gz"
+          wget -q "https://github.com/SagerNet/sing-box/releases/download/v${SB_VER}/${ARCHIVE}"
+          tar -xzf "$ARCHIVE" -C /tmp/
+          mv "/tmp/sing-box-${SB_VER}-linux-amd64/sing-box" ./sing-box
+          chmod +x ./sing-box
+          rm -rf "/tmp/sing-box-${SB_VER}-linux-amd64" "$ARCHIVE"
+          echo "[INFO] sing-box $(./sing-box version | head -1)"
+
+      - name: 随机延迟
+        run: |
+          delay=$((RANDOM % 120))
+          echo "随机延迟: ${delay}秒"
+          sleep $delay
+
+      - name: 执行续期
+        working-directory: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+          python3 -u hus-renew.py 2>&1 | tee hus-renew.log &
+          renew_pid=$!
+          while kill -0 "$renew_pid" 2>/dev/null; do
+            echo "[HEARTBEAT] 执行续期仍在运行: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            sleep 15
+          done
+          wait "$renew_pid"
+
+      - name: 上传截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hus-screenshots-${{ github.run_id }}
+          path: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}/${{ env.SCREENSHOT_DIR }}
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: 上传日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hus-renew-log-${{ github.run_id }}
+          path: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}/hus-renew.log
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: 清理本地截图
+        if: always()
+        run: |
+          SCREENSHOT_PATH="${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}/${{ env.SCREENSHOT_DIR }}"
+          if [ -d "$SCREENSHOT_PATH" ]; then
+            rm -rf "$SCREENSHOT_PATH"/*
+            echo "本地截图已清理"
+          fi
+
+      - name: 提交执行时间
+        if: always()
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # time.txt 可能被并发的 schedule/手动 run 同时更新。
+          # 每次以最新 origin/main 为基准重建提交，避免 pull --rebase 产生内容冲突。
+          for attempt in 1 2 3; do
+            echo "提交执行时间，第 ${attempt}/3 次尝试"
+            git fetch origin refs/heads/main:refs/remotes/origin/main
+            git reset --hard origin/main
+            mkdir -p "${{ env.PROJECT_DIR }}"
+            date +'%Y-%m-%d %H:%M:%S' > "${{ env.PROJECT_DIR }}/time.txt"
+            git add "${{ env.PROJECT_DIR }}/time.txt"
+            git commit -m "更新时间文件: $(date +'%Y-%m-%d %H:%M:%S')"
+            if git push origin HEAD:refs/heads/main; then
+              echo "执行时间已提交"
+              exit 0
+            fi
+            echo "推送发生并发冲突，重新获取远端后重试"
+            git reset --hard origin/main
+            sleep 2
+          done
+          echo "3 次推送均失败"
+          exit 1
+
+      - name: 🧹 清理旧的工作流运行记录
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          current_run="${{ github.run_id }}"
+          # 拉全量记录，按创建时间倒序（最新在前）
+          runs=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow="hus-renew.yml" \
+            --limit=100 \
+            --json databaseId,createdAt,status,conclusion \
+            --jq 'sort_by(.createdAt) | reverse | .[] | [.databaseId, .createdAt, .status, (.conclusion // "")] | @tsv' 2>/dev/null)
+          if [ -z "$runs" ]; then
+            echo "没有找到可清理的运行记录"
+            exit 0
+          fi
+          kept_history=false
+          while IFS=$'\t' read -r run_id created_at status conclusion; do
+            [ -z "$run_id" ] && continue
+            if [ "$run_id" = "$current_run" ]; then
+              echo "保留当前运行记录: $run_id"
+              continue
+            fi
+            if [ "$status" != "completed" ]; then
+              echo "保留未完成记录: $run_id (status=$status)"
+              continue
+            fi
+            if [ "$kept_history" = false ]; then
+              echo "保留最新一条历史记录: $run_id ($created_at)"
+              kept_history=true
+              continue
+            fi
+            echo "删除多余历史记录: $run_id (created=$created_at, conclusion=$conclusion)"
+            gh run delete "$run_id" --repo "$GITHUB_REPOSITORY" || true
+          done <<< "$runs"
+          echo "清理完成：仅保留当前运行 + 最新一条历史记录"
