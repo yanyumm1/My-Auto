@@ -14,7 +14,7 @@
 #   SOCKS_PORT          可选，缺省 10808
 # =============================================================================
 
-name: ♻️ Woiden Auto Renew
+name: ♻️ Woiden44 Auto Renew
 
 on:
   workflow_dispatch:
