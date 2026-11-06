@@ -1,8 +1,39 @@
-name: 🔄 Hus506 Auto Renew
+# =============================================================================
+# 多账号说明：一个账号 = 一个 workflow 文件
+# 本文件 = 第 ① 个账号 | cron 00:07 UTC | group Hus_Renew_1 | secret HUS_BATCH | 时间文件 hus/1/time.txt
+# -----------------------------------------------------------------------------
+# 新增账号的做法：复制本文件 → 改文件名 → 改下面 6 处（漏任何一处都会出问题）
+#
+#   1. name:              改成不同的名字，如 "🔄 Hus Auto Renew ④"
+#                          → 不改：Actions 列表里全是同名 workflow，出问题分不清谁是谁
+#
+#   2. cron               和其他份错开 10 分钟，如 '37 0 */2 * *'
+#                          → 不改：同一秒启动，几份同时 git push 会互相冲突，同时向 WARP 注册也容易被限流
+#
+#   3. concurrency.group  改成唯一的，如 Hus_Renew_4        ★ 最容易漏的一条 ★
+#                          → 不改：concurrency group 是【仓库级、跨 workflow 共享】的，
+#                            和别的份同名 → 所有 workflow 串行排队，并行收益直接归零
+#
+#   4. HUS_BATCH_N        本文件有两处（job 的 env 和「校验 HUS_BATCH」步骤的 env），都要改
+#                          → 不改：读到别人的 secret，同一个账号会被续两遍（还可能并发撞车）
+#
+#   5. TIME_DIR           改成 hus/4，和其他份分开
+#                          → 不改：多份同时写同一个 time.txt，并发提交互相覆盖
+#
+#   6. 仓库 Settings → Secrets 新建一个 HUS_BATCH_4，内容为单个账号的 6 个字段：
+#                          phone,tg_bot_token,tg_chat_id,tg_api_id,tg_api_hash,tg_session
+#
+# 不需要改的：
+#   - artifact 名（hus-screenshots-${{ github.run_id }}）→ run_id 每次运行唯一，天然不冲突
+#   - PROJECT_DIR / PRIVATE_REPO / 代理与 token 相关 secret → 各份共用同一套
+#   - 步骤内容 → 私有库里的 hus-renew.py 是同一份，改脚本只需要改一处
+# =============================================================================
+
+name: 🔄 Hus506 Auto Renew ①-sharp
 
 on:
   schedule:
-    - cron: '40 18 * * *'
+    - cron: '40 18 * * *'  #每2天UTC 00:07（第①份，错开避免并发）
   workflow_dispatch:
 
 permissions:
@@ -12,17 +43,21 @@ permissions:
 jobs:
   renew:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 60 分钟不够：单台服务器最坏路径 = 20 次 captcha 重试 × 20 轮 IP 轮换 × 10s 命令超时，
+    # 被硬砍会在账号处理到一半时中断（留下"续了一半"的状态）。
+    timeout-minutes: 120
     concurrency:
-      group: Hus_Renew
+      group: Hus_Renew_3
+      # 手动触发不应该取消正在跑的定时任务——那会把正在续期的账号打断在半路。
+      # 设成 false 后，新任务排队等待，而不是抢占。
       cancel-in-progress: false
     env:
       # ════════════════════════════════════════════════════════════════
       # Secrets（在公开 repo → Settings → Secrets 中配置）
       # ════════════════════════════════════════════════════════════════
-      # hus.co.id 账号，多个用分号分隔：
+      # 本 workflow 只跑一个账号，读 HUS_BATCH_N（N = 文件名编号）：
       #   phone,tg_bot_token,tg_chat_id,tg_api_id,tg_api_hash,tg_session
-      #   TG 凭据（后三个字段）由每账号独立提供
+      # 多账号 = 多个 workflow 文件，各自一个 secret，互不影响。
       HUS_BATCH: ${{ secrets.HUS_BATCH }}
       # 代理
       PROXY_CONTENT: ${{ secrets.HUS_HY2_PROXY_URL }}
@@ -30,16 +65,24 @@ jobs:
       # 可选
       SCREENSHOT_DIR: screenshots
       DEBUG_FLAG: "0"
-      # 续期重试次数（外层）
-      MAX_RENEW_RETRIES: "0"
-      # IP 被封时切换 WARP 重试次数（内层）
-      #所以一共会重试3*5=15次
-      MAX_WARP_RETRIES: "20"
+      # 续期重试次数（外层：整个续期流程重跑次数，实际执行 = 该值 + 1）
+      MAX_RENEW_RETRIES: "3"
+      # 换 WARP IP 重试次数（中层：captcha 被拒后"换IP→重新提交"的循环次数，
+      # 每次循环触发一次下面的内层轮换）
+      MAX_WARP_RETRIES: "10"
+      # 单次换 IP 内部 warp-cli 重注册轮数（内层：对应日志"轮换尝试 x/N"。
+      # Cloudflare 立即重注册常返回同一出口 IP，轮次间递增等待 5/10/15/20s；
+      # 全部轮次拿不到新 IP 则本次换 IP 失败，由上层重试重新开一轮）
+      MAX_WARP_ROTATE_ATTEMPTS: "20"
+      # 单条 warp-cli 命令超时秒数（超时强杀进程组，防止孤儿 warp-cli 卡住管道）
+      WARP_CMD_TIMEOUT: "10"
       # 登录重试次数
       MAX_LOGIN_RETRIES: "1"
       # 私有仓库（含 hus-renew.py）
       PRIVATE_REPO: yanyumm1/hus
       PROJECT_DIR: hus
+      # 每份 workflow 各写各的时间文件，多账号并发也不会互相覆盖
+      TIME_DIR: hus/1
 
     steps:
       - name: 检出公开仓库
@@ -56,26 +99,58 @@ jobs:
           ref: main
           path: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
           fetch-depth: 1
+          # 不要把 PRIVATE_REPO_TOKEN 留在 .git/config 里——私有库是检出到公开库
+          # 工作区内部的子目录，token 一旦落盘就有被后续步骤/误提交带出去的风险。
+          persist-credentials: false
 
       - name: 校验 HUS_BATCH
         env:
           HUS_BATCH: ${{ secrets.HUS_BATCH }}
         run: |
           python3 - <<'PY'
-          import os, sys
+          import json, os, sys
           value = os.environ.get("HUS_BATCH", "").strip()
           if not value:
               raise SystemExit("HUS_BATCH 未设置或为空")
-          accounts = [x.strip() for x in value.replace("\\n", ";").split(";") if x.strip()]
-          if not accounts:
-              raise SystemExit("HUS_BATCH 没有有效账号")
-          for index, account in enumerate(accounts, 1):
-              fields = [x.strip() for x in account.split(",")]
-              if len(fields) < 6:
-                  raise SystemExit(f"HUS_BATCH 第 {index} 个账号字段不足：需要 phone,bot_token,chat_id,api_id,api_hash,session")
-              if any(not fields[i] for i in range(6)):
-                  raise SystemExit(f"HUS_BATCH 第 {index} 个账号存在空字段")
-          print(f"HUS_BATCH 预检通过：{len(accounts)} 个账号，凭据内容已隐藏")
+
+          phones = []
+          if value.startswith("["):
+              # JSON 数组格式：多账号推荐写法，字段名见 README
+              try:
+                  data = json.loads(value)
+              except json.JSONDecodeError as exc:
+                  raise SystemExit(f"HUS_BATCH 以 [ 开头但 JSON 解析失败：{exc}")
+              if not isinstance(data, list) or not data:
+                  raise SystemExit("HUS_BATCH 的 JSON 必须是非空数组")
+              for index, item in enumerate(data, 1):
+                  if not isinstance(item, dict):
+                      raise SystemExit(f"HUS_BATCH 第 {index} 项不是对象")
+                  phone = str(item.get("phone") or "").strip()
+                  if not phone:
+                      raise SystemExit(f"HUS_BATCH 第 {index} 项缺少 phone")
+                  missing = [k for k in ("tg_bot_token", "tg_chat_id", "tg_api_id", "tg_api_hash", "tg_session")
+                             if not str(item.get(k) or "").strip()]
+                  if missing:
+                      raise SystemExit(f"HUS_BATCH 第 {index} 个账号缺少字段：{','.join(missing)}")
+                  phones.append(phone)
+              fmt = "JSON"
+          else:
+              accounts = [x.strip() for x in value.replace("\\n", ";").split(";") if x.strip()]
+              if not accounts:
+                  raise SystemExit("HUS_BATCH 没有有效账号")
+              for index, account in enumerate(accounts, 1):
+                  fields = [x.strip() for x in account.split(",")]
+                  if len(fields) < 6:
+                      raise SystemExit(f"HUS_BATCH 第 {index} 个账号字段不足：需要 phone,bot_token,chat_id,api_id,api_hash,session")
+                  if any(not fields[i] for i in range(6)):
+                      raise SystemExit(f"HUS_BATCH 第 {index} 个账号存在空字段")
+                  phones.append(fields[0])
+              fmt = "分号"
+
+          dupes = sorted({p for p in phones if phones.count(p) > 1})
+          if dupes:
+              raise SystemExit(f"HUS_BATCH 存在重复账号（会导致同一账号被续两次）：{', '.join(dupes)}")
+          print(f"HUS_BATCH 预检通过：{len(phones)} 个账号（{fmt}格式），凭据内容已隐藏")
           PY
 
       - name: 设置 Python
@@ -85,21 +160,40 @@ jobs:
           cache: pip
           cache-dependency-path: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}/requirements.txt
 
-      - name: 缓存 Chromium apt 包
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/hus-apt/*.deb
-          key: apt-chromium-${{ runner.os }}-${{ runner.arch }}-v1
-
       - name: 安装依赖
         working-directory: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
         run: |
-          mkdir -p "$HOME/.cache/hus-apt/partial"
-          sudo apt-get update
-          sudo apt-get -o Dir::Cache::archives="$HOME/.cache/hus-apt" \
-            install -y xvfb chromium ffmpeg unzip curl wget jq ca-certificates
-          pip install --upgrade pip
+          # runner 镜像（Ubuntu 26.04）已自带 Chromium 155 / Xvfb / curl / wget / jq / unzip。
+          # 以前无脑 apt install 这 8 个包，实际只缺 ffmpeg，却拖进 100+ 个依赖、
+          # 48MB、60 个文件，从 azure.archive.ubuntu.com 下只有 ~59KB/s，光装依赖就 834 秒。
+          # 现在：缺什么补什么；ffmpeg 改用 PyPI 的静态二进制（走 PyPI，实测 11 秒装完全部 pip 包）。
+          missing=""
+          command -v chromium >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1 \
+            || missing="$missing chromium"
+          for bin in Xvfb curl wget jq unzip; do
+            command -v "$bin" >/dev/null 2>&1 || missing="$missing $bin"
+          done
+          if [ -n "$missing" ]; then
+            echo "[INFO] 镜像缺少:$missing，补装"
+            sudo apt-get update
+            sudo apt-get install -y $missing
+          else
+            echo "[INFO] 浏览器和基础工具镜像已自带，跳过 apt"
+          fi
+
+          pip install --upgrade pip -q
           pip install -r requirements.txt -q
+          # 预生成字体缓存：Chromium 第一次启动会在容器里现算字体缓存，实测要 20 秒以上，
+          # 正好撞上 DrissionPage 默认的 30 秒连接超时（偶发 BrowserConnectError 的根源）。
+          fc-cache -f >/dev/null 2>&1 || true
+          FFMPEG_BIN=$(python3 -c 'import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())')
+          sudo ln -sf "$FFMPEG_BIN" /usr/local/bin/ffmpeg
+          echo "[INFO] ffmpeg: $(ffmpeg -version | head -1)"
+          for b in chromium chromium-browser google-chrome google-chrome-stable; do
+            if command -v "$b" >/dev/null 2>&1; then
+              echo "[INFO] 浏览器 $b: $("$b" --version 2>&1 | head -1) → $(command -v "$b")"
+            fi
+          done
           python3 -c 'import speech_recognition, pydub, audioop; print("语音依赖导入成功")'
 
       - name: 启用 WARP
@@ -134,14 +228,30 @@ jobs:
       - name: 执行续期
         working-directory: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ env.PROJECT_DIR }}
         run: |
-          set -o pipefail
-          python3 -u hus-renew.py 2>&1 | tee hus-renew.log &
+          # 不要用 `python3 ... | tee log &`：管道里 $! 是 tee 的 PID，
+          # wait 拿到的是 tee 的退出码（恒为 0），脚本失败会被彻底吞掉。
+          # 这里改用重定向 + wait 真实 PID，并把日志尾部回显到 job 输出。
+          python3 -u hus-renew.py > hus-renew.log 2>&1 &
           renew_pid=$!
-          while kill -0 "$renew_pid" 2>/dev/null; do
-            echo "[HEARTBEAT] 执行续期仍在运行: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            sleep 15
-          done
-          wait "$renew_pid"
+          # 不打 HEARTBEAT：GitHub Actions 没有「无输出即超时」的机制，job 只要进程
+          # 还活着就会一直跑（上限由 timeout-minutes 控制）。每 15 秒一行心跳只会把
+          # 真正的日志淹掉，出问题时反而要多翻几十行才能找到关键行。
+          # 注意：job 默认 `bash -e`，`wait` 返回非 0 会让 shell 当场退出，
+          # 后面的退出码回显和日志尾部全都打不出来（失败时反而没有诊断信息）。
+          # 这里显式兜住退出码。
+          status=0
+          wait "$renew_pid" || status=$?
+          echo "---- hus-renew.py 退出码: ${status} ----"
+          # 失败时把完整日志铺出来：tail 80 常常正好把最早的致命错误截掉
+          # （ImportError / NameError 这类都发生在启动阶段）。成功时保持精简。
+          if [ "$status" -ne 0 ]; then
+            echo "---- 日志全文（退出码 ${status}，完整输出）----"
+            cat hus-renew.log || true
+          else
+            echo "---- 日志尾部（最后 80 行）----"
+            tail -n 80 hus-renew.log || true
+          fi
+          exit "$status"
 
       - name: 上传截图
         if: always()
@@ -183,10 +293,10 @@ jobs:
             echo "提交执行时间，第 ${attempt}/3 次尝试"
             git fetch origin refs/heads/main:refs/remotes/origin/main
             git reset --hard origin/main
-            mkdir -p "${{ env.PROJECT_DIR }}"
-            date +'%Y-%m-%d %H:%M:%S' > "${{ env.PROJECT_DIR }}/time.txt"
-            git add "${{ env.PROJECT_DIR }}/time.txt"
-            git commit -m "更新时间文件: $(date +'%Y-%m-%d %H:%M:%S')"
+            mkdir -p "${{ env.TIME_DIR }}"
+            date +'%Y-%m-%d %H:%M:%S' > "${{ env.TIME_DIR }}/time.txt"
+            git add "${{ env.TIME_DIR }}/time.txt"
+            git commit -m "更新时间文件(①): $(date +'%Y-%m-%d %H:%M:%S')"
             if git push origin HEAD:refs/heads/main; then
               echo "执行时间已提交"
               exit 0
@@ -205,34 +315,35 @@ jobs:
         run: |
           set +e
           current_run="${{ github.run_id }}"
-          # 拉全量记录，按创建时间倒序（最新在前）
+          cutoff_epoch=$(date -d '24 hours ago' +%s)
           runs=$(gh run list \
             --repo "$GITHUB_REPOSITORY" \
-            --workflow="hus-renew.yml" \
             --limit=100 \
-            --json databaseId,createdAt,status,conclusion \
-            --jq 'sort_by(.createdAt) | reverse | .[] | [.databaseId, .createdAt, .status, (.conclusion // "")] | @tsv' 2>/dev/null)
+            --json databaseId,createdAt,status \
+            --jq '.[] | [.databaseId, .createdAt, .status] | @tsv' 2>/dev/null)
           if [ -z "$runs" ]; then
             echo "没有找到可清理的运行记录"
             exit 0
           fi
-          kept_history=false
-          while IFS=$'\t' read -r run_id created_at status conclusion; do
+
+          # 先筛出该删的，再并发删除。
+          # 以前逐条 gh run delete（每次约 1 秒），几十条历史就是 70 多秒；
+          # 改成 xargs -P 10 之后只要几秒。
+          to_delete=$(while IFS=$'\t' read -r run_id created_at status; do
             [ -z "$run_id" ] && continue
-            if [ "$run_id" = "$current_run" ]; then
-              echo "保留当前运行记录: $run_id"
-              continue
-            fi
-            if [ "$status" != "completed" ]; then
-              echo "保留未完成记录: $run_id (status=$status)"
-              continue
-            fi
-            if [ "$kept_history" = false ]; then
-              echo "保留最新一条历史记录: $run_id ($created_at)"
-              kept_history=true
-              continue
-            fi
-            echo "删除多余历史记录: $run_id (created=$created_at, conclusion=$conclusion)"
-            gh run delete "$run_id" --repo "$GITHUB_REPOSITORY" || true
-          done <<< "$runs"
-          echo "清理完成：仅保留当前运行 + 最新一条历史记录"
+            [ "$run_id" = "$current_run" ] && continue
+            [ "$status" != "completed" ] && continue
+            created_epoch=$(date -d "$created_at" +%s 2>/dev/null || echo 0)
+            [ "$created_epoch" -ge "$cutoff_epoch" ] && continue
+            echo "$run_id"
+          done <<< "$runs")
+
+          if [ -z "$to_delete" ]; then
+            echo "清理完成：没有超过 24 小时的已完成记录"
+            exit 0
+          fi
+
+          count=$(echo "$to_delete" | wc -l | tr -d ' ')
+          echo "待删除 $count 条超过 24 小时的已完成记录（并发 10 路）"
+          echo "$to_delete" | xargs -P 10 -I{} sh -c 'gh run delete "$1" --repo "$2" >/dev/null 2>&1 || true' _ {} "$GITHUB_REPOSITORY"
+          echo "清理完成：保留最近 24 小时记录及所有未完成记录"
