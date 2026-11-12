@@ -66,8 +66,6 @@ jobs:
             fonts-liberation \
             fonts-noto-color-emoji
 
-          sudo apt-get install -y chromium || sudo apt-get install -y chromium-browser
-
 
       - name: Install Python dependencies
         run: |
